@@ -1,0 +1,69 @@
+// Contrato IPC — define os canais e payloads entre Electron main ↔ renderer.
+// Ambos os lados importam daqui, garantindo type-safety ponta a ponta.
+
+import type {
+  ConnectionConfig,
+  ConnectionStatus,
+  TransactionState,
+  DatabaseObjectType,
+  DatabaseObjectSummary,
+  MutationResult,
+  SqlExecutionRequest,
+  SqlExecutionResponse,
+  ObjectDetailResponse,
+  UpdateRowRequest,
+  AppError,
+  IpcResult,
+} from "@gavadb/types";
+
+/** Canais que o renderer pode invocar no main process (ipcRenderer.invoke) */
+export interface IpcMainHandlers {
+  "db:connect": (config: ConnectionConfig) => Promise<IpcResult<void>>;
+  "db:disconnect": () => Promise<IpcResult<void>>;
+  "db:execute-query": (request: SqlExecutionRequest) => Promise<IpcResult<SqlExecutionResponse>>;
+  "db:update-rows": (request: UpdateRowRequest[]) => Promise<IpcResult<MutationResult>>;
+  "db:commit": () => Promise<IpcResult<MutationResult>>;
+  "db:rollback": () => Promise<IpcResult<void>>;
+  "db:get-transaction-state": () => Promise<IpcResult<TransactionState>>;
+  "db:list-objects": (type: DatabaseObjectType) => Promise<IpcResult<DatabaseObjectSummary[]>>;
+  "db:get-source": (type: DatabaseObjectType, name: string) => Promise<IpcResult<ObjectDetailResponse>>;
+}
+
+/** Canais que o main process pode emitir para o renderer (win.webContents.send) */
+export interface IpcRendererEvents {
+  "db:status-changed": (status: ConnectionStatus) => void;
+  "db:transaction-state-changed": (state: TransactionState) => void;
+  "db:error": (error: AppError) => void;
+}
+
+/** Nomes dos canais IPC — evita strings mágicas espalhadas pelo código */
+export const IPC_CHANNELS = {
+  DB_CONNECT: "db:connect",
+  DB_DISCONNECT: "db:disconnect",
+  DB_EXECUTE_QUERY: "db:execute-query",
+  DB_UPDATE_ROWS: "db:update-rows",
+  DB_COMMIT: "db:commit",
+  DB_ROLLBACK: "db:rollback",
+  DB_GET_TRANSACTION_STATE: "db:get-transaction-state",
+  DB_LIST_OBJECTS: "db:list-objects",
+  DB_GET_SOURCE: "db:get-source",
+  DB_STATUS_CHANGED: "db:status-changed",
+  DB_TRANSACTION_STATE_CHANGED: "db:transaction-state-changed",
+  DB_ERROR: "db:error",
+} as const;
+
+/** API exposta ao renderer via contextBridge (window.gavadb) */
+export interface GavaDbApi {
+  dbConnect: (config: ConnectionConfig) => Promise<IpcResult<void>>;
+  dbDisconnect: () => Promise<IpcResult<void>>;
+  dbExecuteQuery: (request: SqlExecutionRequest) => Promise<IpcResult<SqlExecutionResponse>>;
+  dbUpdateRows: (request: UpdateRowRequest[]) => Promise<IpcResult<MutationResult>>;
+  dbCommit: () => Promise<IpcResult<MutationResult>>;
+  dbRollback: () => Promise<IpcResult<void>>;
+  dbGetTransactionState: () => Promise<IpcResult<TransactionState>>;
+  dbListObjects: (type: DatabaseObjectType) => Promise<IpcResult<DatabaseObjectSummary[]>>;
+  dbGetSource: (type: DatabaseObjectType, name: string) => Promise<IpcResult<ObjectDetailResponse>>;
+  onStatusChanged: (cb: (status: ConnectionStatus) => void) => () => void;
+  onTransactionStateChanged: (cb: (state: TransactionState) => void) => () => void;
+  onError: (cb: (error: AppError) => void) => () => void;
+}

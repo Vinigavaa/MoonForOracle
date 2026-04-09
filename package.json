@@ -1,0 +1,23 @@
+{
+  "name": "gavadb",
+  "private": true,
+  "description": "Oracle database management tool — simplified TOAD-like desktop app",
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "build:all": "turbo run build && pnpm --filter @gavadb/desktop run build:renderer",
+    "package": "pnpm run build:all && pnpm --filter @gavadb/desktop run package",
+    "package:installer": "pnpm run build:all && pnpm --filter @gavadb/desktop run package:installer",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "clean": "turbo run clean"
+  },
+  "devDependencies": {
+    "turbo": "^2.4.0",
+    "typescript": "^5.7.0"
+  }
+}

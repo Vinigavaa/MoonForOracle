@@ -1,0 +1,28 @@
+{
+  "name": "@gavadb/oracle",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@gavadb/types": "workspace:*",
+    "oracledb": "^6.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.2",
+    "@types/oracledb": "^6.10.2",
+    "typescript": "^5.7.0"
+  }
+}

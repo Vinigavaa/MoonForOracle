@@ -1,0 +1,4 @@
+# Monorepo workspace — apps consomem packages, nunca o inverso
+packages:
+  - "apps/*"
+  - "packages/*"
