@@ -1,4 +1,4 @@
-export type { ConnectionConfig, ConnectionStatus, TransactionState } from "./connection";
+export type { ConnectionConfig, ConnectionStatus, TransactionState, TnsAliasEntry, TnsFileRequest } from "./connection";
 export type { DatabaseObjectType, DatabaseObjectSummary, ColumnInfo, TableDetail, ViewDetail, SourceDetail, ObjectDetailResponse } from "./database";
 export type {
   QueryResultColumn,

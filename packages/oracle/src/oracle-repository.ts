@@ -115,8 +115,14 @@ export class OracleRepository implements DatabaseRepository {
   async connect(config: ConnectionConfig): Promise<void> {
     await this.disconnect();
 
+    if (config.mode === "tns" && config.tnsFilePath) {
+      const configDir = path.dirname(path.resolve(config.tnsFilePath));
+      process.env.TNS_ADMIN = configDir;
+      console.log(`[Oracle] TNS_ADMIN set to ${configDir} from connection config`);
+    }
+
     const connectString = config.mode === "tns"
-      ? config.connectString
+      ? (config.tnsAlias?.trim() || config.connectString)
       : `${config.host}:${config.port}/${config.serviceName}`;
     console.log(`[Oracle] Connecting to ${config.username}@${connectString}`);
 

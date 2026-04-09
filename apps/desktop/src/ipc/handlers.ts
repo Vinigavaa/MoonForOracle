@@ -1,4 +1,4 @@
-import { ipcMain, app, type BrowserWindow } from "electron";
+import { ipcMain, app, dialog, type BrowserWindow } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 import { IPC_CHANNELS } from "@gavadb/ipc-contract";
@@ -12,6 +12,7 @@ import type {
   IpcResult,
   UpdateRowRequest,
   TransactionState,
+  TnsFileRequest,
 } from "@gavadb/types";
 import * as useCases from "../use-cases";
 
@@ -148,6 +149,40 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     } catch (err) {
       const appError = logIpcError(IPC_CHANNELS.DB_UPDATE_ROWS, err);
       return fail(appError);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DB_READ_TNS_ALIASES, async (_event, request: TnsFileRequest) => {
+    try {
+      const aliases = await useCases.loadTnsAliases(request);
+      return ok(aliases);
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.DB_READ_TNS_ALIASES, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DB_TEST_CONNECTION, async (_event, config: ConnectionConfig) => {
+    try {
+      await useCases.testConnection(config);
+      return ok(undefined);
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.DB_TEST_CONNECTION, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DB_PICK_TNS_FILE, async () => {
+    try {
+      const result = await dialog.showOpenDialog(win, {
+        title: "Select tnsnames.ora",
+        properties: ["openFile"],
+        filters: [
+          { name: "Oracle TNS", extensions: ["ora"] },
+          { name: "All files", extensions: ["*"] },
+        ],
+      });
+      return ok(result.canceled ? null : (result.filePaths[0] ?? null));
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.DB_PICK_TNS_FILE, err));
     }
   });
 

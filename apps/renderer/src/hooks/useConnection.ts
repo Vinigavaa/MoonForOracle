@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ConnectionConfig, ConnectionStatus, AppError, TransactionState } from "@gavadb/types";
+import type { ConnectionConfig, ConnectionStatus, AppError, TransactionState, TnsAliasEntry } from "@gavadb/types";
 
 /** Config sem senha — mantida em memória para preencher o modal na próxima conexão */
 type SavedConfig = Omit<ConnectionConfig, "password">;
@@ -83,6 +83,36 @@ export function useConnection() {
     return { error: result.error };
   }, []);
 
+  const loadTnsAliases = useCallback(async (filePath: string): Promise<{ data?: TnsAliasEntry[]; error?: AppError }> => {
+    setError(null);
+    const result = await window.gavadb.dbReadTnsAliases({ filePath });
+    if (result.success) {
+      return { data: result.data };
+    }
+    setError(result.error);
+    return { error: result.error };
+  }, []);
+
+  const testConnection = useCallback(async (config: ConnectionConfig): Promise<{ error?: AppError }> => {
+    setError(null);
+    const result = await window.gavadb.dbTestConnection(config);
+    if (result.success) {
+      return {};
+    }
+    setError(result.error);
+    return { error: result.error };
+  }, []);
+
+  const pickTnsFile = useCallback(async (): Promise<{ data?: string | null; error?: AppError }> => {
+    setError(null);
+    const result = await window.gavadb.dbPickTnsFile();
+    if (result.success) {
+      return { data: result.data };
+    }
+    setError(result.error);
+    return { error: result.error };
+  }, []);
+
   const isConnected = status === "connected";
   const isConnecting = status === "connecting";
 
@@ -100,5 +130,8 @@ export function useConnection() {
     refreshTransactionState,
     commitTransaction,
     rollbackTransaction,
+    loadTnsAliases,
+    testConnection,
+    pickTnsFile,
   };
 }

@@ -6,7 +6,7 @@ import { TabPanel, type Tab } from "./components/TabPanel";
 import { SqlEditor } from "./components/SqlEditor";
 import { ObjectViewer } from "./components/ObjectViewer";
 import { PreferencesPanel } from "./components/PreferencesPanel";
-import { ConnectionModal } from "./components/ConnectionModal";
+import { ConnectionDialog } from "./components/ConnectionDialog";
 import { useConnection } from "./hooks/useConnection";
 import { useToastContext } from "./hooks/ToastContext";
 
@@ -33,6 +33,9 @@ export function App() {
     transactionState,
     commitTransaction,
     rollbackTransaction,
+    loadTnsAliases,
+    testConnection,
+    pickTnsFile,
   } = useConnection();
 
   const toast = useToastContext();
@@ -231,10 +234,13 @@ export function App() {
         </TabPanel>
       </div>
 
-      <ConnectionModal
+      <ConnectionDialog
         open={showConnModal}
         onClose={handleCloseModal}
         onConnect={handleConnect}
+        onTestConnection={testConnection}
+        onLoadTnsAliases={loadTnsAliases}
+        onPickTnsFile={pickTnsFile}
         lastConfig={lastConfig}
         error={error}
         connecting={isConnecting}

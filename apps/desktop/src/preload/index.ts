@@ -5,6 +5,7 @@ import type {
   ConnectionConfig,
   ConnectionStatus,
   TransactionState,
+  TnsFileRequest,
   DatabaseObjectType,
   SqlExecutionRequest,
   UpdateRowRequest,
@@ -31,6 +32,15 @@ contextBridge.exposeInMainWorld("gavadb", {
 
   dbGetTransactionState: () =>
     ipcRenderer.invoke(IPC_CHANNELS.DB_GET_TRANSACTION_STATE),
+
+  dbReadTnsAliases: (request: TnsFileRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.DB_READ_TNS_ALIASES, request),
+
+  dbPickTnsFile: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.DB_PICK_TNS_FILE),
+
+  dbTestConnection: (config: ConnectionConfig) =>
+    ipcRenderer.invoke(IPC_CHANNELS.DB_TEST_CONNECTION, config),
 
   dbListObjects: (type: DatabaseObjectType) =>
     ipcRenderer.invoke(IPC_CHANNELS.DB_LIST_OBJECTS, type),

@@ -5,6 +5,8 @@ import type {
   ConnectionConfig,
   ConnectionStatus,
   TransactionState,
+  TnsAliasEntry,
+  TnsFileRequest,
   DatabaseObjectType,
   DatabaseObjectSummary,
   MutationResult,
@@ -25,6 +27,9 @@ export interface IpcMainHandlers {
   "db:commit": () => Promise<IpcResult<MutationResult>>;
   "db:rollback": () => Promise<IpcResult<void>>;
   "db:get-transaction-state": () => Promise<IpcResult<TransactionState>>;
+  "db:read-tns-aliases": (request: TnsFileRequest) => Promise<IpcResult<TnsAliasEntry[]>>;
+  "db:pick-tns-file": () => Promise<IpcResult<string | null>>;
+  "db:test-connection": (config: ConnectionConfig) => Promise<IpcResult<void>>;
   "db:list-objects": (type: DatabaseObjectType) => Promise<IpcResult<DatabaseObjectSummary[]>>;
   "db:get-source": (type: DatabaseObjectType, name: string) => Promise<IpcResult<ObjectDetailResponse>>;
 }
@@ -45,6 +50,9 @@ export const IPC_CHANNELS = {
   DB_COMMIT: "db:commit",
   DB_ROLLBACK: "db:rollback",
   DB_GET_TRANSACTION_STATE: "db:get-transaction-state",
+  DB_READ_TNS_ALIASES: "db:read-tns-aliases",
+  DB_PICK_TNS_FILE: "db:pick-tns-file",
+  DB_TEST_CONNECTION: "db:test-connection",
   DB_LIST_OBJECTS: "db:list-objects",
   DB_GET_SOURCE: "db:get-source",
   DB_STATUS_CHANGED: "db:status-changed",
@@ -61,6 +69,9 @@ export interface GavaDbApi {
   dbCommit: () => Promise<IpcResult<MutationResult>>;
   dbRollback: () => Promise<IpcResult<void>>;
   dbGetTransactionState: () => Promise<IpcResult<TransactionState>>;
+  dbReadTnsAliases: (request: TnsFileRequest) => Promise<IpcResult<TnsAliasEntry[]>>;
+  dbPickTnsFile: () => Promise<IpcResult<string | null>>;
+  dbTestConnection: (config: ConnectionConfig) => Promise<IpcResult<void>>;
   dbListObjects: (type: DatabaseObjectType) => Promise<IpcResult<DatabaseObjectSummary[]>>;
   dbGetSource: (type: DatabaseObjectType, name: string) => Promise<IpcResult<ObjectDetailResponse>>;
   onStatusChanged: (cb: (status: ConnectionStatus) => void) => () => void;
