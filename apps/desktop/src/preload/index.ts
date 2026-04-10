@@ -9,6 +9,7 @@ import type {
   DatabaseObjectType,
   SqlExecutionRequest,
   UpdateRowRequest,
+  SaveConnectionRequest,
 } from "@gavadb/types";
 
 contextBridge.exposeInMainWorld("gavadb", {
@@ -47,6 +48,24 @@ contextBridge.exposeInMainWorld("gavadb", {
 
   dbGetSource: (type: DatabaseObjectType, name: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.DB_GET_SOURCE, type, name),
+
+  connListSaved: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.CONN_LIST_SAVED),
+
+  connGetWithPassword: (id: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.CONN_GET_WITH_PASSWORD, id),
+
+  connSave: (request: SaveConnectionRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.CONN_SAVE, request),
+
+  connDelete: (id: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.CONN_DELETE, id),
+
+  connToggleFavorite: (id: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.CONN_TOGGLE_FAVORITE, id),
+
+  connUpdateLastUsed: (id: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.CONN_UPDATE_LAST_USED, id),
 
   onStatusChanged: (cb: (status: ConnectionStatus) => void) => {
     const handler = (_e: IpcRendererEvent, status: ConnectionStatus) => cb(status);

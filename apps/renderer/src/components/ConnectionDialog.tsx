@@ -1,18 +1,22 @@
 import { useState, useCallback, useEffect, useRef } from "react";
-import type { ConnectionConfig, AppError, TnsAliasEntry } from "@gavadb/types";
+import type { ConnectionConfig, AppError, TnsAliasEntry, SavedConnection, SaveConnectionRequest } from "@gavadb/types";
 import { generateId } from "@gavadb/utils";
 import { defaultConnectionPreferences, loadConnectionPreferences, saveConnectionPreferences } from "../lib/connectionPreferences";
 
 interface ConnectionDialogProps {
   open: boolean;
   onClose: () => void;
-  onConnect: (config: ConnectionConfig) => Promise<void>;
+  onConnect: (config: ConnectionConfig, savedConnectionId?: string) => Promise<void>;
   onTestConnection: (config: ConnectionConfig) => Promise<{ error?: AppError }>;
   onLoadTnsAliases: (filePath: string) => Promise<{ data?: TnsAliasEntry[]; error?: AppError }>;
   onPickTnsFile: () => Promise<{ data?: string | null; error?: AppError }>;
+  onSaveConnection?: (request: SaveConnectionRequest) => Promise<SavedConnection | null>;
   lastConfig: Omit<ConnectionConfig, "password"> | null;
   error: AppError | null;
   connecting: boolean;
+  /** When editing a saved connection, pre-populate the form */
+  editingConnection?: SavedConnection | null;
+  editingPassword?: string;
 }
 
 type ConnMode = "basic" | "tns";
@@ -25,6 +29,7 @@ interface FormErrors {
   tnsAlias?: string;
   username?: string;
   password?: string;
+  friendlyName?: string;
 }
 
 export function ConnectionDialog({
@@ -34,9 +39,12 @@ export function ConnectionDialog({
   onTestConnection,
   onLoadTnsAliases,
   onPickTnsFile,
+  onSaveConnection,
   lastConfig,
   error,
   connecting,
+  editingConnection,
+  editingPassword,
 }: ConnectionDialogProps) {
   const [mode, setMode] = useState<ConnMode>("basic");
   const [host, setHost] = useState("");
@@ -50,11 +58,32 @@ export function ConnectionDialog({
   const [loadingAliases, setLoadingAliases] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
   const [formErrors, setFormErrors] = useState<FormErrors>({});
+  const [saveConnection, setSaveConnection] = useState(false);
+  const [friendlyName, setFriendlyName] = useState("");
   const hostRef = useRef<HTMLInputElement>(null);
   const tnsFileRef = useRef<HTMLInputElement>(null);
 
+  const isEditing = !!editingConnection;
+
   useEffect(() => {
     if (!open) return;
+
+    // If editing a saved connection, use its values
+    if (editingConnection) {
+      setMode(editingConnection.mode);
+      setHost(editingConnection.host ?? "");
+      setPort(String(editingConnection.port || 1521));
+      setServiceName(editingConnection.serviceName ?? "");
+      setTnsFilePath(editingConnection.tnsFilePath ?? "");
+      setTnsAlias(editingConnection.tnsAlias ?? "");
+      setUsername(editingConnection.username ?? "");
+      setPassword(editingPassword ?? "");
+      setFriendlyName(editingConnection.friendlyName);
+      setSaveConnection(true);
+      setAliases([]);
+      setFormErrors({});
+      return;
+    }
 
     const stored = loadConnectionPreferences() ?? defaultConnectionPreferences();
     const seed = lastConfig ?? {
@@ -78,6 +107,8 @@ export function ConnectionDialog({
     setTnsAlias((seed as Partial<ConnectionConfig>).tnsAlias ?? seed.connectString ?? stored.tnsAlias ?? stored.connectString);
     setUsername(seed.username ?? stored.username);
     setPassword("");
+    setFriendlyName("");
+    setSaveConnection(false);
     setAliases([]);
     setFormErrors({});
 
@@ -85,7 +116,7 @@ export function ConnectionDialog({
       if ((seed.mode ?? "basic") === "tns") tnsFileRef.current?.focus();
       else hostRef.current?.focus();
     }, 50);
-  }, [open, lastConfig]);
+  }, [open, lastConfig, editingConnection, editingPassword]);
 
   const persistPreferences = useCallback((nextMode: ConnMode = mode) => {
     saveConnectionPreferences({
@@ -174,12 +205,47 @@ export function ConnectionDialog({
 
   const handleSubmit = useCallback(async () => {
     const errors = validate();
+    if ((saveConnection || isEditing) && !friendlyName.trim()) {
+      errors.friendlyName = "Connection name is required";
+    }
     setFormErrors(errors);
     if (Object.keys(errors).length > 0) return;
 
     persistPreferences();
-    await onConnect(buildConfig());
-  }, [buildConfig, onConnect, persistPreferences, validate]);
+
+    const config = buildConfig();
+    let savedId: string | undefined;
+
+    // Save or update the connection if requested
+    if ((saveConnection || isEditing) && onSaveConnection) {
+      const now = new Date().toISOString();
+      const savedConn: SavedConnection = {
+        id: editingConnection?.id ?? generateId(),
+        friendlyName: friendlyName.trim(),
+        mode,
+        host: host.trim(),
+        port: Number(port) || 1521,
+        serviceName: serviceName.trim(),
+        tnsAlias: mode === "tns" ? tnsAlias.trim() : undefined,
+        tnsFilePath: mode === "tns" ? tnsFilePath.trim() : undefined,
+        username: username.trim(),
+        isFavorite: editingConnection?.isFavorite ?? false,
+        lastUsedAt: editingConnection?.lastUsedAt,
+        createdAt: editingConnection?.createdAt ?? now,
+        updatedAt: now,
+      };
+      const result = await onSaveConnection({ connection: savedConn, password: password || undefined });
+      if (result) savedId = result.id;
+    }
+
+    if (isEditing && !connecting) {
+      // If just editing (not connecting), close dialog
+      onClose();
+      return;
+    }
+
+    await onConnect(config, savedId);
+  }, [buildConfig, onConnect, persistPreferences, validate, saveConnection, isEditing, friendlyName, onSaveConnection, editingConnection, mode, host, port, serviceName, tnsAlias, tnsFilePath, username, password, connecting, onClose]);
 
   const handleTestConnection = useCallback(async () => {
     const errors = validate();
@@ -217,7 +283,7 @@ export function ConnectionDialog({
     >
       <div style={dialogStyle}>
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: "var(--text-primary)" }}>
-          Connect to Oracle
+          {isEditing ? "Edit Saved Connection" : "Connect to Oracle"}
         </h2>
 
         <div style={{ display: "flex", gap: 0, marginBottom: 16 }}>
@@ -346,6 +412,33 @@ export function ConnectionDialog({
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password" style={inputStyle(formErrors.password)} />
             {formErrors.password && <div style={fieldErrorStyle}>{formErrors.password}</div>}
           </div>
+
+          {onSaveConnection && (
+            <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: 12 }}>
+              {!isEditing && (
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--text-secondary)", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={saveConnection}
+                    onChange={(e) => setSaveConnection(e.target.checked)}
+                  />
+                  Save this connection for quick access
+                </label>
+              )}
+              {(saveConnection || isEditing) && (
+                <div style={{ marginTop: 8 }}>
+                  <label style={labelStyle}>Connection Name</label>
+                  <input
+                    value={friendlyName}
+                    onChange={(e) => setFriendlyName(e.target.value)}
+                    placeholder="e.g. Production DB, Dev Oracle"
+                    style={inputStyle(formErrors.friendlyName)}
+                  />
+                  {formErrors.friendlyName && <div style={fieldErrorStyle}>{formErrors.friendlyName}</div>}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {error && (
@@ -366,7 +459,7 @@ export function ConnectionDialog({
             {testingConnection ? "Testing..." : "Test Connection"}
           </button>
           <button onClick={() => void handleSubmit()} disabled={connecting || testingConnection} style={connectBtnStyle}>
-            {connecting ? "Connecting..." : "Connect"}
+            {connecting ? "Connecting..." : isEditing ? "Save & Close" : "Connect"}
           </button>
         </div>
       </div>

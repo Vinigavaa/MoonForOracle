@@ -26,6 +26,12 @@ interface PendingRowChange {
   changes: QueryResultRow;
 }
 
+/** Which cell is currently focused (selected) */
+interface CellPosition {
+  rowIndex: number;
+  colIndex: number;
+}
+
 const ROW_HEIGHT = 28;
 const OVERSCAN = 10;
 const INPUT_HEIGHT = 20;
@@ -77,10 +83,12 @@ export const ResultGrid = memo(function ResultGrid({
   onSort,
 }: ResultGridProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewHeight, setViewHeight] = useState(400);
   const [pendingChanges, setPendingChanges] = useState<Record<number, PendingRowChange>>({});
-  const [editingCell, setEditingCell] = useState<{ rowIndex: number; columnName: string } | null>(null);
+  const [selectedCell, setSelectedCell] = useState<CellPosition | null>(null);
+  const [editingCell, setEditingCell] = useState<CellPosition | null>(null);
   const [editValue, setEditValue] = useState("");
 
   useEffect(() => {
@@ -93,6 +101,7 @@ export const ResultGrid = memo(function ResultGrid({
 
   useEffect(() => {
     setPendingChanges({});
+    setSelectedCell(null);
     setEditingCell(null);
     setEditValue("");
   }, [result]);
@@ -111,7 +120,7 @@ export const ResultGrid = memo(function ResultGrid({
 
   // Toggle sort: asc → desc → asc
   const toggleSort = useCallback((columnName: string) => {
-    if (!onSort || sorting) return; // prevent concurrent sort requests or no handler
+    if (!onSort || sorting) return;
     if (Object.keys(pendingChanges).length > 0) {
       window.alert("Save or cancel the current inline changes before sorting.");
       return;
@@ -146,15 +155,19 @@ export const ResultGrid = memo(function ResultGrid({
     return slice;
   }, [rows, pendingChanges, startIdx, endIdx]);
 
-  const beginEdit = useCallback((rowIndex: number, column: QueryResultColumn) => {
+  // ─── Editing logic ───────────────────────────────────────────────
+
+  const beginEdit = useCallback((rowIndex: number, colIndex: number) => {
+    const column = columns[colIndex];
+    if (!column) return;
     const baseRow = rows[rowIndex];
     if (!baseRow) return;
     const changes = pendingChanges[rowIndex]?.changes;
     const currentValue = changes && column.name in changes ? changes[column.name] : baseRow[column.name];
     if (!canEditRows || !isEditableCellValue(currentValue) || mutating) return;
-    setEditingCell({ rowIndex, columnName: column.name });
+    setEditingCell({ rowIndex, colIndex });
     setEditValue(formatEditableCellValue(currentValue));
-  }, [canEditRows, rows, pendingChanges, mutating]);
+  }, [canEditRows, rows, columns, pendingChanges, mutating]);
 
   const cancelEditing = useCallback(() => {
     setEditingCell(null);
@@ -163,11 +176,11 @@ export const ResultGrid = memo(function ResultGrid({
 
   const commitEdit = useCallback(() => {
     if (!editingCell) return;
-    const { rowIndex, columnName } = editingCell;
+    const { rowIndex, colIndex } = editingCell;
+    const column = columns[colIndex];
     const originalRow = rows[rowIndex];
-    const originalValue = originalRow?.[columnName];
-    const column = columns.find((item) => item.name === columnName);
     if (!column || !originalRow) { cancelEditing(); return; }
+    const originalValue = originalRow[column.name];
 
     const parsedValue = parseEditedValue(editValue, originalValue, column);
     const sameValue = areCellValuesEqual(parsedValue, originalValue);
@@ -175,8 +188,8 @@ export const ResultGrid = memo(function ResultGrid({
     setPendingChanges((prev) => {
       const current = prev[rowIndex] ?? { originalRow, changes: {} };
       const nextChanges = { ...current.changes };
-      if (sameValue) delete nextChanges[columnName];
-      else nextChanges[columnName] = parsedValue;
+      if (sameValue) delete nextChanges[column.name];
+      else nextChanges[column.name] = parsedValue;
 
       if (Object.keys(nextChanges).length === 0) {
         const next = { ...prev };
@@ -185,13 +198,17 @@ export const ResultGrid = memo(function ResultGrid({
       }
       return { ...prev, [rowIndex]: { originalRow, changes: nextChanges } };
     });
-    cancelEditing();
+    setEditingCell(null);
+    setEditValue("");
+    // Keep selection on the same cell after commit
+    setSelectedCell({ rowIndex, colIndex });
   }, [cancelEditing, columns, editValue, editingCell, rows]);
 
   const cancelPendingChanges = useCallback(() => {
     setPendingChanges({});
-    cancelEditing();
-  }, [cancelEditing]);
+    setEditingCell(null);
+    setEditValue("");
+  }, []);
 
   const handleSaveChanges = useCallback(async () => {
     if (!canEditRows || !editableInfo?.tableName || !editableInfo.primaryKeyColumns?.length || !onSaveChanges) return;
@@ -215,27 +232,153 @@ export const ResultGrid = memo(function ResultGrid({
     }
   }, [canEditRows, editableInfo, onRefresh, onSaveChanges, pendingChanges, pendingRowIndexes]);
 
+  // ─── Keyboard navigation ─────────────────────────────────────────
+
+  const scrollCellIntoView = useCallback((rowIndex: number) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const rowTop = rowIndex * ROW_HEIGHT;
+    const rowBottom = rowTop + ROW_HEIGHT;
+    const viewTop = el.scrollTop + headerHeight;
+    const viewBottom = el.scrollTop + el.clientHeight;
+    if (rowTop < viewTop) {
+      el.scrollTop = rowTop - headerHeight;
+    } else if (rowBottom > viewBottom) {
+      el.scrollTop = rowBottom - el.clientHeight;
+    }
+  }, [headerHeight]);
+
+  const handleGridKeyDown = useCallback((e: React.KeyboardEvent) => {
+    // If we're in editing mode, let the input handle keys
+    if (editingCell) return;
+
+    const sel = selectedCell;
+    if (!sel) {
+      // If no cell selected, select first cell on any arrow key
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+        e.preventDefault();
+        setSelectedCell({ rowIndex: 0, colIndex: 0 });
+        scrollCellIntoView(0);
+      }
+      return;
+    }
+
+    const { rowIndex, colIndex } = sel;
+
+    switch (e.key) {
+      case "ArrowUp":
+        e.preventDefault();
+        if (rowIndex > 0) {
+          setSelectedCell({ rowIndex: rowIndex - 1, colIndex });
+          scrollCellIntoView(rowIndex - 1);
+        }
+        break;
+      case "ArrowDown":
+        e.preventDefault();
+        if (rowIndex < totalRows - 1) {
+          setSelectedCell({ rowIndex: rowIndex + 1, colIndex });
+          scrollCellIntoView(rowIndex + 1);
+        }
+        break;
+      case "ArrowLeft":
+        e.preventDefault();
+        if (colIndex > 0) {
+          setSelectedCell({ rowIndex, colIndex: colIndex - 1 });
+        }
+        break;
+      case "ArrowRight":
+        e.preventDefault();
+        if (colIndex < columns.length - 1) {
+          setSelectedCell({ rowIndex, colIndex: colIndex + 1 });
+        }
+        break;
+      case "Tab":
+        e.preventDefault();
+        if (e.shiftKey) {
+          if (colIndex > 0) setSelectedCell({ rowIndex, colIndex: colIndex - 1 });
+          else if (rowIndex > 0) setSelectedCell({ rowIndex: rowIndex - 1, colIndex: columns.length - 1 });
+        } else {
+          if (colIndex < columns.length - 1) setSelectedCell({ rowIndex, colIndex: colIndex + 1 });
+          else if (rowIndex < totalRows - 1) {
+            setSelectedCell({ rowIndex: rowIndex + 1, colIndex: 0 });
+            scrollCellIntoView(rowIndex + 1);
+          }
+        }
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (canEditRows) {
+          beginEdit(rowIndex, colIndex);
+        }
+        break;
+      case "Escape":
+        e.preventDefault();
+        setSelectedCell(null);
+        break;
+      case "c":
+        if (e.ctrlKey || e.metaKey) {
+          // Copy cell value to clipboard
+          const col = columns[colIndex];
+          if (col) {
+            const row = rows[rowIndex];
+            const changes = pendingChanges[rowIndex]?.changes;
+            const value = changes && col.name in changes ? changes[col.name] : row?.[col.name];
+            const text = value == null ? "" : formatCellDisplay(value, col);
+            void navigator.clipboard.writeText(text);
+          }
+        }
+        break;
+    }
+  }, [editingCell, selectedCell, totalRows, columns, canEditRows, beginEdit, scrollCellIntoView, rows, pendingChanges]);
+
+  const handleCellClick = useCallback((rowIndex: number, colIndex: number) => {
+    // Single click = select only
+    if (editingCell) {
+      // If clicking a different cell while editing, commit current edit first
+      if (editingCell.rowIndex !== rowIndex || editingCell.colIndex !== colIndex) {
+        commitEdit();
+      }
+    }
+    setSelectedCell({ rowIndex, colIndex });
+  }, [editingCell, commitEdit]);
+
+  const handleCellDoubleClick = useCallback((rowIndex: number, colIndex: number) => {
+    if (canEditRows) {
+      setSelectedCell({ rowIndex, colIndex });
+      beginEdit(rowIndex, colIndex);
+    }
+  }, [canEditRows, beginEdit]);
+
   if (result.columns.length === 0) {
     return <div style={emptyStateStyle}>No columns returned</div>;
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div
+      style={{ display: "flex", flexDirection: "column", height: "100%" }}
+      onKeyDown={handleGridKeyDown}
+      tabIndex={0}
+    >
       <div style={toolbarStyle}>
         <button onClick={handleSaveChanges} disabled={!canEditRows || pendingRowIndexes.length === 0 || !!mutating} style={primaryButtonStyle}>
-          Save Changes
+          Apply Changes
         </button>
         <button onClick={cancelPendingChanges} disabled={pendingRowIndexes.length === 0 || !!mutating} style={secondaryButtonStyle}>
-          Cancel Changes
+          Discard Changes
         </button>
         <span style={toolbarInfoStyle}>
-          {canEditRows ? `${pendingRowIndexes.length} changed` : editableInfo?.reason ?? "This result is read-only"}
+          {canEditRows
+            ? pendingRowIndexes.length > 0
+              ? `${pendingRowIndexes.length} row(s) modified — use Commit to persist`
+              : "Editable — double-click or Enter to edit a cell"
+            : editableInfo?.reason ?? "Read-only result"
+          }
         </span>
         {(mutating || sorting) && <span style={loadingStyle}>{sorting ? "Sorting..." : "Applying changes..."}</span>}
       </div>
 
       <div ref={scrollRef} onScroll={onScroll} style={{ flex: 1, overflow: "auto" }}>
-        <table style={tableStyle}>
+        <table ref={tableRef} style={tableStyle}>
           <thead>
             <tr style={{ height: headerHeight }}>
               <th style={rowNumHeaderStyle}>#</th>
@@ -256,48 +399,79 @@ export const ResultGrid = memo(function ResultGrid({
             {startIdx > 0 && (
               <tr style={{ height: startIdx * ROW_HEIGHT }}><td colSpan={columns.length + 1} /></tr>
             )}
-            {visibleDisplayRows.map(({ row, rowIdx }) => (
-              <tr key={rowIdx} style={{ height: ROW_HEIGHT, background: rowIdx % 2 === 0 ? "transparent" : "var(--bg-surface)" }}>
-                <td style={rowNumCellStyle}>{rowIdx + 1}</td>
-                {columns.map((col) => {
-                  const cellValue = row[col.name];
-                  const isEditing = editingCell?.rowIndex === rowIdx && editingCell.columnName === col.name;
-                  const isChanged = !!pendingChanges[rowIdx]?.changes && col.name in pendingChanges[rowIdx]!.changes;
-                  return (
-                    <td
-                      key={col.name}
-                      style={{ ...dataCellStyle, ...(isChanged ? changedCellStyle : {}) }}
-                      onClick={() => {
-                        if (!isEditing) beginEdit(rowIdx, col);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !isEditing) { e.preventDefault(); beginEdit(rowIdx, col); }
-                        if (e.key === "Escape" && isEditing) { e.preventDefault(); cancelEditing(); }
-                      }}
-                      tabIndex={canEditRows ? 0 : -1}
-                    >
-                      {isEditing ? (
-                        <input
-                          autoFocus
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          onBlur={commitEdit}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") { e.preventDefault(); commitEdit(); }
-                            if (e.key === "Escape") { e.preventDefault(); cancelEditing(); }
-                          }}
-                          style={inputStyle}
-                        />
-                      ) : row[col.name] == null ? (
-                        <span style={nullCellStyle}>NULL</span>
-                      ) : (
-                        formatCellDisplay(cellValue, col)
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
+            {visibleDisplayRows.map(({ row, rowIdx }) => {
+              const hasRowChanges = !!pendingChanges[rowIdx];
+              return (
+                <tr
+                  key={rowIdx}
+                  style={{
+                    height: ROW_HEIGHT,
+                    background: hasRowChanges
+                      ? "rgba(125, 211, 252, 0.04)"
+                      : rowIdx % 2 === 0 ? "transparent" : "var(--bg-surface)",
+                  }}
+                >
+                  <td style={{
+                    ...rowNumCellStyle,
+                    ...(hasRowChanges ? { color: "var(--accent)", fontWeight: 600 } : {}),
+                  }}>
+                    {hasRowChanges ? "\u2022" : ""} {rowIdx + 1}
+                  </td>
+                  {columns.map((col, colIdx) => {
+                    const isSelected = selectedCell?.rowIndex === rowIdx && selectedCell?.colIndex === colIdx;
+                    const isEditing = editingCell?.rowIndex === rowIdx && editingCell?.colIndex === colIdx;
+                    const isChanged = !!pendingChanges[rowIdx]?.changes && col.name in pendingChanges[rowIdx]!.changes;
+                    const cellValue = row[col.name];
+
+                    return (
+                      <td
+                        key={col.name}
+                        onClick={() => handleCellClick(rowIdx, colIdx)}
+                        onDoubleClick={() => handleCellDoubleClick(rowIdx, colIdx)}
+                        style={{
+                          ...dataCellStyle,
+                          ...(isChanged ? changedCellStyle : {}),
+                          ...(isSelected && !isEditing ? selectedCellStyle : {}),
+                          ...(isEditing ? editingCellStyle : {}),
+                        }}
+                      >
+                        {isEditing ? (
+                          <input
+                            autoFocus
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onBlur={commitEdit}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") { e.preventDefault(); commitEdit(); }
+                              if (e.key === "Escape") { e.preventDefault(); cancelEditing(); setSelectedCell({ rowIndex: rowIdx, colIndex: colIdx }); }
+                              if (e.key === "Tab") {
+                                e.preventDefault();
+                                commitEdit();
+                                // Move selection after commit
+                                if (e.shiftKey) {
+                                  if (colIdx > 0) setSelectedCell({ rowIndex: rowIdx, colIndex: colIdx - 1 });
+                                  else if (rowIdx > 0) setSelectedCell({ rowIndex: rowIdx - 1, colIndex: columns.length - 1 });
+                                } else {
+                                  if (colIdx < columns.length - 1) setSelectedCell({ rowIndex: rowIdx, colIndex: colIdx + 1 });
+                                  else if (rowIdx < totalRows - 1) setSelectedCell({ rowIndex: rowIdx + 1, colIndex: 0 });
+                                }
+                              }
+                              // Stop propagation so grid handler doesn't also fire
+                              e.stopPropagation();
+                            }}
+                            style={inputStyle}
+                          />
+                        ) : cellValue == null ? (
+                          <span style={nullCellStyle}>NULL</span>
+                        ) : (
+                          formatCellDisplay(cellValue, col)
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
             {endIdx < totalRows && (
               <tr style={{ height: (totalRows - endIdx) * ROW_HEIGHT }}><td colSpan={columns.length + 1} /></tr>
             )}
@@ -366,8 +540,10 @@ const rowNumHeaderStyle: React.CSSProperties = { position: "sticky", top: 0, pad
 const sortableColHeaderStyle: React.CSSProperties = { position: "sticky", top: 0, padding: "6px 12px", textAlign: "left", background: "var(--bg-surface)", borderBottom: "1px solid var(--border-color)", color: "var(--accent)", fontWeight: 600, whiteSpace: "nowrap", zIndex: 1, cursor: "pointer", userSelect: "none" };
 const sortArrowStyle: React.CSSProperties = { fontSize: 10, marginLeft: 2 };
 const columnTypeStyle: React.CSSProperties = { color: "var(--text-muted)", fontWeight: 400, marginLeft: 6, fontSize: 11 };
-const rowNumCellStyle: React.CSSProperties = { padding: "4px 10px", textAlign: "right", borderBottom: "1px solid var(--border-subtle)", borderRight: "1px solid var(--border-subtle)", color: "var(--text-muted)", fontSize: 11, userSelect: "none" };
-const dataCellStyle: React.CSSProperties = { padding: "4px 12px", borderBottom: "1px solid var(--border-subtle)", color: "var(--text-secondary)", whiteSpace: "nowrap", maxWidth: 400, overflow: "hidden", textOverflow: "ellipsis" };
+const rowNumCellStyle: React.CSSProperties = { padding: "4px 10px", textAlign: "right", borderBottom: "1px solid var(--border-subtle)", borderRight: "1px solid var(--border-subtle)", color: "var(--text-muted)", fontSize: 11, userSelect: "none", whiteSpace: "nowrap" };
+const dataCellStyle: React.CSSProperties = { padding: "4px 12px", borderBottom: "1px solid var(--border-subtle)", color: "var(--text-secondary)", whiteSpace: "nowrap", maxWidth: 400, overflow: "hidden", textOverflow: "ellipsis", cursor: "default" };
 const changedCellStyle: React.CSSProperties = { background: "rgba(125, 211, 252, 0.12)", boxShadow: "inset 0 0 0 1px rgba(125, 211, 252, 0.28)", color: "var(--text-primary)" };
+const selectedCellStyle: React.CSSProperties = { outline: "2px solid var(--accent)", outlineOffset: -2, background: "rgba(137, 180, 250, 0.08)" };
+const editingCellStyle: React.CSSProperties = { outline: "2px solid var(--accent)", outlineOffset: -2, padding: 2 };
 const inputStyle: React.CSSProperties = { width: "100%", height: INPUT_HEIGHT, padding: "0 6px", background: "var(--bg-primary)", border: "1px solid var(--accent)", borderRadius: 4, color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: "var(--font-size-sm)", outline: "none" };
 const nullCellStyle: React.CSSProperties = { color: "var(--text-muted)", fontStyle: "italic" };

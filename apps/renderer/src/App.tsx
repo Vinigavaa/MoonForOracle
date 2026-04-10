@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { DatabaseObjectType, ConnectionConfig } from "@gavadb/types";
+import type { DatabaseObjectType, ConnectionConfig, SavedConnection } from "@gavadb/types";
 import { Toolbar } from "./components/Toolbar";
 import { Sidebar } from "./components/Sidebar";
 import { TabPanel, type Tab } from "./components/TabPanel";
@@ -8,6 +8,7 @@ import { ObjectViewer } from "./components/ObjectViewer";
 import { PreferencesPanel } from "./components/PreferencesPanel";
 import { ConnectionDialog } from "./components/ConnectionDialog";
 import { useConnection } from "./hooks/useConnection";
+import { useSavedConnections } from "./hooks/useSavedConnections";
 import { useToastContext } from "./hooks/ToastContext";
 
 const SQL_TAB_ID = "sql-editor";
@@ -38,10 +39,15 @@ export function App() {
     pickTnsFile,
   } = useConnection();
 
+  const savedConns = useSavedConnections();
   const toast = useToastContext();
   const [transactionBusy, setTransactionBusy] = useState(false);
   const [showConnModal, setShowConnModal] = useState(false);
   const [activeTab, setActiveTab] = useState(SQL_TAB_ID);
+  const [activeConnectionId, setActiveConnectionId] = useState<string | null>(null);
+  const [editingConnection, setEditingConnection] = useState<SavedConnection | null>(null);
+  const [editingPassword, setEditingPassword] = useState<string>("");
+  const [connectingId, setConnectingId] = useState<string | null>(null);
   const [objectTabs, setObjectTabs] = useState<ObjectTab[]>([]);
   const executeTriggerRef = useRef<(() => void) | null>(null);
   const executeAllTriggerRef = useRef<(() => void) | null>(null);
@@ -60,16 +66,77 @@ export function App() {
 
   const handleOpenConnect = useCallback(() => {
     clearError();
+    setEditingConnection(null);
+    setEditingPassword("");
     setShowConnModal(true);
   }, [clearError]);
 
-  const handleConnect = useCallback(async (config: ConnectionConfig) => {
+  const handleConnect = useCallback(async (config: ConnectionConfig, savedConnectionId?: string) => {
     await connect(config);
-  }, [connect]);
+    if (savedConnectionId) {
+      setActiveConnectionId(savedConnectionId);
+      await savedConns.updateLastUsed(savedConnectionId);
+    } else {
+      setActiveConnectionId(null);
+    }
+  }, [connect, savedConns]);
+
+  const handleQuickConnect = useCallback(async (id: string) => {
+    if (isConnected) {
+      toast.warning("There is already an active connection. Disconnect before connecting to another database.");
+      return;
+    }
+    if (activeConnectionId === id && isConnected) {
+      toast.info("This connection is already active.");
+      return;
+    }
+    setConnectingId(id);
+    const connData = await savedConns.getWithPassword(id);
+    if (!connData) {
+      toast.error("Failed to load saved connection.");
+      setConnectingId(null);
+      return;
+    }
+    const config: ConnectionConfig = {
+      id: connData.id,
+      name: `${connData.username}@${connData.mode === "tns" ? connData.tnsAlias : `${connData.host}:${connData.port}/${connData.serviceName}`}`,
+      mode: connData.mode,
+      host: connData.host,
+      port: connData.port,
+      serviceName: connData.serviceName,
+      connectString: connData.mode === "tns" ? (connData.tnsAlias ?? "") : "",
+      tnsFilePath: connData.tnsFilePath,
+      tnsAlias: connData.tnsAlias,
+      username: connData.username,
+      password: connData.password,
+    };
+    await connect(config);
+    setActiveConnectionId(id);
+    await savedConns.updateLastUsed(id);
+    setConnectingId(null);
+  }, [isConnected, connect, savedConns, activeConnectionId, toast]);
+
+  const handleEditSavedConnection = useCallback(async (conn: SavedConnection) => {
+    const connData = await savedConns.getWithPassword(conn.id);
+    setEditingConnection(conn);
+    setEditingPassword(connData?.password ?? "");
+    clearError();
+    setShowConnModal(true);
+  }, [savedConns, clearError]);
+
+  const handleDeleteSavedConnection = useCallback(async (id: string, name: string) => {
+    const removed = await savedConns.remove(id);
+    if (removed) {
+      toast.info(`Connection "${name}" deleted`);
+      if (activeConnectionId === id) setActiveConnectionId(null);
+    }
+  }, [savedConns, toast, activeConnectionId]);
 
   const handleCloseModal = useCallback(() => {
     if (!isConnecting) {
       setShowConnModal(false);
+      setEditingConnection(null);
+      setEditingPassword("");
       clearError();
     }
   }, [isConnecting, clearError]);
@@ -109,6 +176,7 @@ export function App() {
     }
 
     await disconnect();
+    setActiveConnectionId(null);
     toast.info("Disconnected from database");
   }, [commitTransaction, disconnect, rollbackTransaction, toast, transactionState.hasPendingChanges]);
 
@@ -205,7 +273,17 @@ export function App() {
       />
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        <Sidebar isConnected={isConnected} onObjectSelect={handleObjectSelect} />
+        <Sidebar
+          isConnected={isConnected}
+          onObjectSelect={handleObjectSelect}
+          savedConnections={savedConns.connections}
+          activeConnectionId={activeConnectionId}
+          connectingId={connectingId}
+          onQuickConnect={handleQuickConnect}
+          onEditConnection={handleEditSavedConnection}
+          onDeleteConnection={handleDeleteSavedConnection}
+          onToggleFavorite={savedConns.toggleFavorite}
+        />
 
         <TabPanel
           tabs={tabs}
@@ -241,9 +319,12 @@ export function App() {
         onTestConnection={testConnection}
         onLoadTnsAliases={loadTnsAliases}
         onPickTnsFile={pickTnsFile}
+        onSaveConnection={savedConns.save}
         lastConfig={lastConfig}
         error={error}
         connecting={isConnecting}
+        editingConnection={editingConnection}
+        editingPassword={editingPassword}
       />
     </div>
   );

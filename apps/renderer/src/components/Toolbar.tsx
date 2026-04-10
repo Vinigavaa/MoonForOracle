@@ -86,7 +86,6 @@ export function Toolbar({
       {isConnected && (
         <span style={{
           padding: "2px 8px",
-          borderRadius: 999,
           border: `1px solid ${hasPendingTransaction ? "rgba(250, 179, 135, 0.45)" : "var(--border-color)"}`,
           color: hasPendingTransaction ? "var(--warning)" : "var(--text-muted)",
           fontSize: 11,
@@ -101,7 +100,7 @@ export function Toolbar({
         onClick={onCommit}
         disabled={!isConnected || !hasPendingTransaction || !!transactionBusy}
         style={{
-          background: hasPendingTransaction ? "var(--success)" : "transparent",
+          background: hasPendingTransaction ? "var(--accent)" : "transparent",
           color: hasPendingTransaction ? "var(--bg-primary)" : undefined,
           border: hasPendingTransaction ? "none" : "1px solid var(--border-color)",
           fontWeight: 600,

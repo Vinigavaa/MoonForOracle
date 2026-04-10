@@ -16,6 +16,9 @@ import type {
   UpdateRowRequest,
   AppError,
   IpcResult,
+  SavedConnection,
+  SaveConnectionRequest,
+  SavedConnectionWithPassword,
 } from "@gavadb/types";
 
 /** Canais que o renderer pode invocar no main process (ipcRenderer.invoke) */
@@ -32,6 +35,12 @@ export interface IpcMainHandlers {
   "db:test-connection": (config: ConnectionConfig) => Promise<IpcResult<void>>;
   "db:list-objects": (type: DatabaseObjectType) => Promise<IpcResult<DatabaseObjectSummary[]>>;
   "db:get-source": (type: DatabaseObjectType, name: string) => Promise<IpcResult<ObjectDetailResponse>>;
+  "conn:list-saved": () => Promise<IpcResult<SavedConnection[]>>;
+  "conn:get-with-password": (id: string) => Promise<IpcResult<SavedConnectionWithPassword>>;
+  "conn:save": (request: SaveConnectionRequest) => Promise<IpcResult<SavedConnection>>;
+  "conn:delete": (id: string) => Promise<IpcResult<void>>;
+  "conn:toggle-favorite": (id: string) => Promise<IpcResult<SavedConnection>>;
+  "conn:update-last-used": (id: string) => Promise<IpcResult<void>>;
 }
 
 /** Canais que o main process pode emitir para o renderer (win.webContents.send) */
@@ -58,6 +67,12 @@ export const IPC_CHANNELS = {
   DB_STATUS_CHANGED: "db:status-changed",
   DB_TRANSACTION_STATE_CHANGED: "db:transaction-state-changed",
   DB_ERROR: "db:error",
+  CONN_LIST_SAVED: "conn:list-saved",
+  CONN_GET_WITH_PASSWORD: "conn:get-with-password",
+  CONN_SAVE: "conn:save",
+  CONN_DELETE: "conn:delete",
+  CONN_TOGGLE_FAVORITE: "conn:toggle-favorite",
+  CONN_UPDATE_LAST_USED: "conn:update-last-used",
 } as const;
 
 /** API exposta ao renderer via contextBridge (window.gavadb) */
@@ -74,6 +89,12 @@ export interface GavaDbApi {
   dbTestConnection: (config: ConnectionConfig) => Promise<IpcResult<void>>;
   dbListObjects: (type: DatabaseObjectType) => Promise<IpcResult<DatabaseObjectSummary[]>>;
   dbGetSource: (type: DatabaseObjectType, name: string) => Promise<IpcResult<ObjectDetailResponse>>;
+  connListSaved: () => Promise<IpcResult<SavedConnection[]>>;
+  connGetWithPassword: (id: string) => Promise<IpcResult<SavedConnectionWithPassword>>;
+  connSave: (request: SaveConnectionRequest) => Promise<IpcResult<SavedConnection>>;
+  connDelete: (id: string) => Promise<IpcResult<void>>;
+  connToggleFavorite: (id: string) => Promise<IpcResult<SavedConnection>>;
+  connUpdateLastUsed: (id: string) => Promise<IpcResult<void>>;
   onStatusChanged: (cb: (status: ConnectionStatus) => void) => () => void;
   onTransactionStateChanged: (cb: (state: TransactionState) => void) => () => void;
   onError: (cb: (error: AppError) => void) => () => void;

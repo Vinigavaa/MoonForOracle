@@ -13,12 +13,16 @@ import type {
   UpdateRowRequest,
   TransactionState,
   TnsFileRequest,
+  SaveConnectionRequest,
 } from "@gavadb/types";
 import * as useCases from "../use-cases";
+import { SavedConnectionsStore } from "../lib/saved-connections-store";
 
 const repo: DatabaseRepository = new OracleRepository({
   configDir: findTnsAdmin(),
 });
+
+const savedConnectionsStore = new SavedConnectionsStore();
 
 /** Discovers TNS_ADMIN from env, Oracle Client installs, or well-known locations */
 function findTnsAdmin(): string | undefined {
@@ -233,6 +237,58 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       return ok(detail);
     } catch (err) {
       return fail(logIpcError(IPC_CHANNELS.DB_GET_SOURCE, err));
+    }
+  });
+
+  // --- Saved Connections handlers ---
+
+  ipcMain.handle(IPC_CHANNELS.CONN_LIST_SAVED, async () => {
+    try {
+      return ok(savedConnectionsStore.listAll());
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.CONN_LIST_SAVED, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.CONN_GET_WITH_PASSWORD, async (_event, id: string) => {
+    try {
+      return ok(savedConnectionsStore.getWithPassword(id));
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.CONN_GET_WITH_PASSWORD, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.CONN_SAVE, async (_event, request: SaveConnectionRequest) => {
+    try {
+      return ok(savedConnectionsStore.save(request));
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.CONN_SAVE, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.CONN_DELETE, async (_event, id: string) => {
+    try {
+      savedConnectionsStore.delete(id);
+      return ok(undefined);
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.CONN_DELETE, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.CONN_TOGGLE_FAVORITE, async (_event, id: string) => {
+    try {
+      return ok(savedConnectionsStore.toggleFavorite(id));
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.CONN_TOGGLE_FAVORITE, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.CONN_UPDATE_LAST_USED, async (_event, id: string) => {
+    try {
+      savedConnectionsStore.updateLastUsed(id);
+      return ok(undefined);
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.CONN_UPDATE_LAST_USED, err));
     }
   });
 }

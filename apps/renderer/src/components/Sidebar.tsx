@@ -1,10 +1,17 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import type { DatabaseObjectType, DatabaseObjectSummary } from "@gavadb/types";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import type { DatabaseObjectType, DatabaseObjectSummary, SavedConnection } from "@gavadb/types";
 import { useObjectList, type SectionState } from "../hooks/useObjectList";
 
 interface SidebarProps {
   isConnected: boolean;
   onObjectSelect: (type: DatabaseObjectType, name: string) => void;
+  savedConnections: SavedConnection[];
+  activeConnectionId: string | null;
+  connectingId: string | null;
+  onQuickConnect: (id: string) => void;
+  onEditConnection: (conn: SavedConnection) => void;
+  onDeleteConnection: (id: string, name: string) => void;
+  onToggleFavorite: (id: string) => void;
 }
 
 interface SectionDef {
@@ -16,7 +23,7 @@ interface SectionDef {
 const SECTIONS: SectionDef[] = [
   { type: "tables", label: "Tables", icon: "\u229E" },
   { type: "views", label: "Views", icon: "\u25EB" },
-  { type: "triggers", label: "Triggers", icon: "\u26A1" },
+  { type: "triggers", label: "Triggers", icon: "\u25B7" },
   { type: "packages", label: "Packages", icon: "\u25F0" },
   { type: "procedures", label: "Procedures", icon: "\u25B7" },
   { type: "functions", label: "Functions", icon: "\u0192" },
@@ -24,9 +31,20 @@ const SECTIONS: SectionDef[] = [
 
 const EMPTY_SECTION: SectionState = { objects: [], loading: false, error: null, loaded: false };
 
-export function Sidebar({ isConnected, onObjectSelect }: SidebarProps) {
+export function Sidebar({
+  isConnected,
+  onObjectSelect,
+  savedConnections,
+  activeConnectionId,
+  connectingId,
+  onQuickConnect,
+  onEditConnection,
+  onDeleteConnection,
+  onToggleFavorite,
+}: SidebarProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState("");
+  const [connSectionExpanded, setConnSectionExpanded] = useState(true);
   const { getSection, loadSection } = useObjectList(isConnected);
 
   // Reset ao desconectar
@@ -59,6 +77,21 @@ export function Sidebar({ isConnected, onObjectSelect }: SidebarProps) {
       flexShrink: 0,
       overflow: "hidden",
     }}>
+      {/* ── Saved Connections section ── */}
+      <SavedConnectionsSection
+        connections={savedConnections}
+        expanded={connSectionExpanded}
+        onToggle={() => setConnSectionExpanded((p) => !p)}
+        activeConnectionId={activeConnectionId}
+        isConnected={isConnected}
+        connectingId={connectingId}
+        onQuickConnect={onQuickConnect}
+        onEdit={onEditConnection}
+        onDelete={onDeleteConnection}
+        onToggleFavorite={onToggleFavorite}
+      />
+
+      {/* ��─ Database Objects section ── */}
       <div style={{
         padding: "8px 12px",
         fontSize: 11,
@@ -108,6 +141,283 @@ export function Sidebar({ isConnected, onObjectSelect }: SidebarProps) {
     </div>
   );
 }
+
+// ── Saved Connections in sidebar ──
+
+interface SavedConnectionsSectionProps {
+  connections: SavedConnection[];
+  expanded: boolean;
+  onToggle: () => void;
+  activeConnectionId: string | null;
+  isConnected: boolean;
+  connectingId: string | null;
+  onQuickConnect: (id: string) => void;
+  onEdit: (conn: SavedConnection) => void;
+  onDelete: (id: string, name: string) => void;
+  onToggleFavorite: (id: string) => void;
+}
+
+function SavedConnectionsSection({
+  connections,
+  expanded,
+  onToggle,
+  activeConnectionId,
+  isConnected,
+  connectingId,
+  onQuickConnect,
+  onEdit,
+  onDelete,
+  onToggleFavorite,
+}: SavedConnectionsSectionProps) {
+  const [detailsOpenId, setDetailsOpenId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const detailsRef = useRef<HTMLDivElement>(null);
+
+  // Close details popover when clicking outside
+  useEffect(() => {
+    if (!detailsOpenId) return;
+    const handler = (e: MouseEvent) => {
+      if (detailsRef.current && !detailsRef.current.contains(e.target as Node)) {
+        setDetailsOpenId(null);
+        setConfirmDeleteId(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [detailsOpenId]);
+
+  return (
+    <div style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+      {/* Section header */}
+      <button
+        onClick={onToggle}
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "8px 12px",
+          background: "transparent",
+          border: "none",
+          borderRadius: 0,
+          color: "var(--text-muted)",
+          fontSize: 11,
+          fontWeight: 600,
+          textTransform: "uppercase",
+          letterSpacing: "0.05em",
+          textAlign: "left",
+          cursor: "pointer",
+        }}
+      >
+        <span style={{
+          fontSize: 10,
+          transition: "transform 0.15s",
+          transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
+          display: "inline-block",
+        }}>
+          {"\u25B6"}
+        </span>
+        <span>Connections</span>
+        <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-muted)" }}>
+          {connections.length || ""}
+        </span>
+      </button>
+
+      {/* Expanded list */}
+      {expanded && (
+        <div style={{ maxHeight: 220, overflowY: "auto", paddingBottom: 4 }}>
+          {connections.length === 0 ? (
+            <div style={{ padding: "6px 12px 6px 30px", fontSize: 11, color: "var(--text-muted)", fontStyle: "italic" }}>
+              No saved connections
+            </div>
+          ) : (
+            connections.map((conn) => {
+              const isActive = activeConnectionId === conn.id && isConnected;
+              const isThisConnecting = connectingId === conn.id;
+              const isDetailsOpen = detailsOpenId === conn.id;
+
+              return (
+                <div key={conn.id} style={{ position: "relative" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 4,
+                      padding: "4px 8px 4px 18px",
+                      background: isActive ? "rgba(166, 227, 161, 0.06)" : "transparent",
+                      borderLeft: isActive ? "2px solid var(--success)" : "2px solid transparent",
+                    }}
+                  >
+                    {/* Favorite star */}
+                    <span
+                      style={{ fontSize: 11, color: conn.isFavorite ? "var(--warning)" : "var(--text-muted)", cursor: "pointer", flexShrink: 0, lineHeight: 1 }}
+                      onClick={() => onToggleFavorite(conn.id)}
+                      title={conn.isFavorite ? "Unfavorite" : "Favorite"}
+                    >
+                      {conn.isFavorite ? "\u2605" : "\u2606"}
+                    </span>
+
+                    {/* Connection name */}
+                    <span style={{
+                      flex: 1,
+                      fontSize: 12,
+                      color: isActive ? "var(--success)" : "var(--text-primary)",
+                      fontWeight: isActive ? 600 : 400,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}>
+                      {conn.friendlyName}
+                    </span>
+
+                    {/* Action buttons */}
+                    {isActive ? (
+                      <span style={{ fontSize: 10, color: "var(--success)", fontWeight: 600, flexShrink: 0 }}>
+                        {"\u2022"} Active
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => onQuickConnect(conn.id)}
+                        disabled={isThisConnecting}
+                        style={sidebarSmallBtnStyle}
+                        title="Connect"
+                      >
+                        {isThisConnecting ? "..." : "Connect"}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setDetailsOpenId(isDetailsOpen ? null : conn.id)}
+                      style={sidebarSmallBtnStyle}
+                      title="Details"
+                    >
+                      {"\u2026"}
+                    </button>
+                  </div>
+
+                  {/* Details popover */}
+                  {isDetailsOpen && (
+                    <div ref={detailsRef} style={detailsPopoverStyle}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", marginBottom: 8 }}>
+                        {conn.friendlyName}
+                      </div>
+
+                      <div style={detailRowStyle}>
+                        <span style={detailLabelStyle}>Type</span>
+                        <span>{conn.mode === "tns" ? "TNS" : "Manual"}</span>
+                      </div>
+                      <div style={detailRowStyle}>
+                        <span style={detailLabelStyle}>User</span>
+                        <span>{conn.username}</span>
+                      </div>
+                      {conn.mode === "tns" ? (
+                        <>
+                          <div style={detailRowStyle}>
+                            <span style={detailLabelStyle}>Alias</span>
+                            <span>{conn.tnsAlias}</span>
+                          </div>
+                          {conn.tnsFilePath && (
+                            <div style={detailRowStyle}>
+                              <span style={detailLabelStyle}>TNS File</span>
+                              <span style={{ wordBreak: "break-all" }}>{conn.tnsFilePath}</span>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div style={detailRowStyle}>
+                          <span style={detailLabelStyle}>Target</span>
+                          <span>{conn.host}:{conn.port}/{conn.serviceName}</span>
+                        </div>
+                      )}
+                      {conn.lastUsedAt && (
+                        <div style={detailRowStyle}>
+                          <span style={detailLabelStyle}>Last used</span>
+                          <span>{new Date(conn.lastUsedAt).toLocaleDateString()}</span>
+                        </div>
+                      )}
+
+                      <div style={{ display: "flex", gap: 6, marginTop: 10, borderTop: "1px solid var(--border-color)", paddingTop: 8 }}>
+                        <button onClick={() => { onEdit(conn); setDetailsOpenId(null); }} style={popoverBtnStyle}>
+                          Edit
+                        </button>
+                        {confirmDeleteId === conn.id ? (
+                          <>
+                            <span style={{ fontSize: 11, color: "var(--danger)", alignSelf: "center" }}>Confirm?</span>
+                            <button onClick={() => { onDelete(conn.id, conn.friendlyName); setDetailsOpenId(null); setConfirmDeleteId(null); }} style={{ ...popoverBtnStyle, color: "var(--danger)", borderColor: "var(--danger)" }}>
+                              Yes
+                            </button>
+                            <button onClick={() => setConfirmDeleteId(null)} style={popoverBtnStyle}>
+                              No
+                            </button>
+                          </>
+                        ) : (
+                          <button onClick={() => setConfirmDeleteId(conn.id)} style={{ ...popoverBtnStyle, color: "var(--danger)" }}>
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const sidebarSmallBtnStyle: React.CSSProperties = {
+  fontSize: 10,
+  padding: "1px 6px",
+  background: "transparent",
+  border: "1px solid var(--border-color)",
+  borderRadius: "var(--radius)",
+  color: "var(--text-secondary)",
+  cursor: "pointer",
+  flexShrink: 0,
+  lineHeight: "16px",
+};
+
+const detailsPopoverStyle: React.CSSProperties = {
+  position: "absolute",
+  left: "100%",
+  top: 0,
+  zIndex: 100,
+  width: 260,
+  padding: 12,
+  background: "var(--bg-secondary)",
+  border: "1px solid var(--border-color)",
+  borderRadius: 6,
+  boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+  fontSize: 11,
+  color: "var(--text-secondary)",
+};
+
+const detailRowStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 8,
+  padding: "2px 0",
+  fontSize: 11,
+  lineHeight: 1.5,
+};
+
+const detailLabelStyle: React.CSSProperties = {
+  color: "var(--text-muted)",
+  fontWeight: 600,
+  minWidth: 55,
+  flexShrink: 0,
+};
+
+const popoverBtnStyle: React.CSSProperties = {
+  fontSize: 11,
+  padding: "3px 10px",
+  background: "transparent",
+  border: "1px solid var(--border-color)",
+  borderRadius: "var(--radius)",
+  color: "var(--text-secondary)",
+  cursor: "pointer",
+};
 
 // ── Section component ──
 
@@ -160,7 +470,7 @@ function SidebarSection({
           transform: showExpanded ? "rotate(90deg)" : "rotate(0deg)",
           display: "inline-block",
         }}>
-          \u25B6
+          {"\u25B6"}
         </span>
         <span>{def.icon}</span>
         <span>{def.label}</span>

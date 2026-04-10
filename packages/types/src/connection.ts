@@ -34,3 +34,42 @@ export interface TnsAliasEntry {
 export interface TnsFileRequest {
   filePath: string;
 }
+
+/** A saved connection entry persisted to disk for quick reconnection */
+export interface SavedConnection {
+  /** Unique identifier (UUID) */
+  id: string;
+  /** User-friendly display name */
+  friendlyName: string;
+  /** Connection mode */
+  mode: "basic" | "tns";
+  /** Basic mode fields */
+  host: string;
+  port: number;
+  serviceName: string;
+  /** TNS mode fields */
+  tnsAlias?: string;
+  tnsFilePath?: string;
+  /** Common fields */
+  username: string;
+  /** Whether this connection is marked as favorite */
+  isFavorite: boolean;
+  /** ISO timestamp of last successful connection */
+  lastUsedAt?: string;
+  /** ISO timestamp of creation */
+  createdAt: string;
+  /** ISO timestamp of last update */
+  updatedAt: string;
+}
+
+/** Request to create or update a saved connection (password handled separately) */
+export interface SaveConnectionRequest {
+  connection: SavedConnection;
+  /** Password to store securely — omit to keep existing password */
+  password?: string;
+}
+
+/** Saved connection with password retrieved for quick connect */
+export interface SavedConnectionWithPassword extends SavedConnection {
+  password?: string;
+}

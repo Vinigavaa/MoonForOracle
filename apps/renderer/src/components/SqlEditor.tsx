@@ -314,7 +314,7 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
         return { error: result.error };
       }
 
-      toast.success(`${result.data?.rowsAffected ?? request.length} row(s) updated in the current transaction`);
+      toast.success(`${result.data?.rowsAffected ?? request.length} row(s) applied to pending transaction — Commit to persist`);
       return {};
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
