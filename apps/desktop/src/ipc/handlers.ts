@@ -105,7 +105,38 @@ function emitTransactionState(win: BrowserWindow): void {
   win.webContents.send(IPC_CHANNELS.DB_TRANSACTION_STATE_CHANGED, state);
 }
 
+function emitWindowMaximizedState(win: BrowserWindow): void {
+  win.webContents.send(IPC_CHANNELS.WINDOW_MAXIMIZED_CHANGED, win.isMaximized());
+}
+
 export function registerIpcHandlers(win: BrowserWindow): void {
+  win.on("maximize", () => emitWindowMaximizedState(win));
+  win.on("unmaximize", () => emitWindowMaximizedState(win));
+  win.on("restore", () => emitWindowMaximizedState(win));
+
+  ipcMain.handle(IPC_CHANNELS.WINDOW_MINIMIZE, async () => {
+    win.minimize();
+    return ok(undefined);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.WINDOW_TOGGLE_MAXIMIZE, async () => {
+    if (win.isMaximized()) {
+      win.unmaximize();
+    } else {
+      win.maximize();
+    }
+    return ok(win.isMaximized());
+  });
+
+  ipcMain.handle(IPC_CHANNELS.WINDOW_CLOSE, async () => {
+    win.close();
+    return ok(undefined);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.WINDOW_IS_MAXIMIZED, async () => {
+    return ok(win.isMaximized());
+  });
+
   ipcMain.handle(IPC_CHANNELS.DB_CONNECT, async (_event, config: ConnectionConfig) => {
     try {
       win.webContents.send(IPC_CHANNELS.DB_STATUS_CHANGED, "connecting");

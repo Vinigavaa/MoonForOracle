@@ -19,7 +19,7 @@ SELECT e.employee_id,
 
 /* Multi-line comment example */
 BEGIN
-  DBMS_OUTPUT.PUT_LINE('Hello, GavaDB!');
+  DBMS_OUTPUT.PUT_LINE('Hello, Moon For Oracle!');
   NULL; -- do nothing
 END;`;
 

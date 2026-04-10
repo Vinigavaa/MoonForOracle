@@ -67,6 +67,18 @@ contextBridge.exposeInMainWorld("gavadb", {
   connUpdateLastUsed: (id: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.CONN_UPDATE_LAST_USED, id),
 
+  windowMinimize: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.WINDOW_MINIMIZE),
+
+  windowToggleMaximize: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.WINDOW_TOGGLE_MAXIMIZE),
+
+  windowClose: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.WINDOW_CLOSE),
+
+  windowIsMaximized: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.WINDOW_IS_MAXIMIZED),
+
   onStatusChanged: (cb: (status: ConnectionStatus) => void) => {
     const handler = (_e: IpcRendererEvent, status: ConnectionStatus) => cb(status);
     ipcRenderer.on(IPC_CHANNELS.DB_STATUS_CHANGED, handler);
@@ -83,5 +95,11 @@ contextBridge.exposeInMainWorld("gavadb", {
     const handler = (_e: IpcRendererEvent, error: AppError) => cb(error);
     ipcRenderer.on(IPC_CHANNELS.DB_ERROR, handler);
     return () => { ipcRenderer.removeListener(IPC_CHANNELS.DB_ERROR, handler); };
+  },
+
+  onWindowMaximizedChanged: (cb: (isMaximized: boolean) => void) => {
+    const handler = (_e: IpcRendererEvent, isMaximized: boolean) => cb(isMaximized);
+    ipcRenderer.on(IPC_CHANNELS.WINDOW_MAXIMIZED_CHANGED, handler);
+    return () => { ipcRenderer.removeListener(IPC_CHANNELS.WINDOW_MAXIMIZED_CHANGED, handler); };
   },
 });

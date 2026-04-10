@@ -2,8 +2,8 @@
   "name": "@gavadb/desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "GavaDB — Oracle database management tool",
-  "author": "GavaDB",
+  "description": "Moon For Oracle - Oracle database management tool",
+  "author": "Moon For Oracle",
   "main": "dist/main.js",
   "scripts": {
     "dev": "concurrently -k -n tsup,electron \"tsup --watch\" \"wait-on http://localhost:5173 && electron .\"",
@@ -30,14 +30,15 @@
     "wait-on": "^8.0.0"
   },
   "build": {
-    "appId": "com.gavadb.app",
-    "productName": "GavaDB",
+    "appId": "com.moonfororacle.app",
+    "productName": "Moon For Oracle",
     "directories": {
       "output": "release"
     },
     "files": [
       "dist/**/*",
       "package.json",
+      "assets/**/*",
       "!dist/**/*.map"
     ],
     "extraMetadata": {
@@ -50,7 +51,7 @@
           "arch": ["x64"]
         }
       ],
-      "icon": null
+      "icon": "assets/icon.ico"
     },
     "nsis": {
       "oneClick": false,

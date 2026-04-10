@@ -41,6 +41,10 @@ export interface IpcMainHandlers {
   "conn:delete": (id: string) => Promise<IpcResult<void>>;
   "conn:toggle-favorite": (id: string) => Promise<IpcResult<SavedConnection>>;
   "conn:update-last-used": (id: string) => Promise<IpcResult<void>>;
+  "window:minimize": () => Promise<IpcResult<void>>;
+  "window:toggle-maximize": () => Promise<IpcResult<boolean>>;
+  "window:close": () => Promise<IpcResult<void>>;
+  "window:is-maximized": () => Promise<IpcResult<boolean>>;
 }
 
 /** Canais que o main process pode emitir para o renderer (win.webContents.send) */
@@ -48,6 +52,7 @@ export interface IpcRendererEvents {
   "db:status-changed": (status: ConnectionStatus) => void;
   "db:transaction-state-changed": (state: TransactionState) => void;
   "db:error": (error: AppError) => void;
+  "window:maximized-changed": (isMaximized: boolean) => void;
 }
 
 /** Nomes dos canais IPC — evita strings mágicas espalhadas pelo código */
@@ -73,6 +78,11 @@ export const IPC_CHANNELS = {
   CONN_DELETE: "conn:delete",
   CONN_TOGGLE_FAVORITE: "conn:toggle-favorite",
   CONN_UPDATE_LAST_USED: "conn:update-last-used",
+  WINDOW_MINIMIZE: "window:minimize",
+  WINDOW_TOGGLE_MAXIMIZE: "window:toggle-maximize",
+  WINDOW_CLOSE: "window:close",
+  WINDOW_IS_MAXIMIZED: "window:is-maximized",
+  WINDOW_MAXIMIZED_CHANGED: "window:maximized-changed",
 } as const;
 
 /** API exposta ao renderer via contextBridge (window.gavadb) */
@@ -95,7 +105,12 @@ export interface GavaDbApi {
   connDelete: (id: string) => Promise<IpcResult<void>>;
   connToggleFavorite: (id: string) => Promise<IpcResult<SavedConnection>>;
   connUpdateLastUsed: (id: string) => Promise<IpcResult<void>>;
+  windowMinimize: () => Promise<IpcResult<void>>;
+  windowToggleMaximize: () => Promise<IpcResult<boolean>>;
+  windowClose: () => Promise<IpcResult<void>>;
+  windowIsMaximized: () => Promise<IpcResult<boolean>>;
   onStatusChanged: (cb: (status: ConnectionStatus) => void) => () => void;
   onTransactionStateChanged: (cb: (state: TransactionState) => void) => () => void;
   onError: (cb: (error: AppError) => void) => () => void;
+  onWindowMaximizedChanged: (cb: (isMaximized: boolean) => void) => () => void;
 }

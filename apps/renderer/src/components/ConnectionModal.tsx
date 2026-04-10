@@ -178,7 +178,7 @@ export function ConnectionModal({ open, onClose, onConnect, lastConfig, error, c
           <div>
             <label style={labelStyle}>Username</label>
             <input value={username} onChange={(e) => setUsername(e.target.value)}
-              placeholder="scott" style={inputStyle(formErrors.username)} />
+              placeholder="E2GAVA" style={inputStyle(formErrors.username)} />
             {formErrors.username && <div style={fieldErrorStyle}>{formErrors.username}</div>}
           </div>
           <div>

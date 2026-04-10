@@ -1,18 +1,28 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, screen } from "electron";
 import path from "node:path";
 import { registerIpcHandlers } from "../ipc/handlers";
 
 const IS_DEV = !app.isPackaged;
 const RENDERER_DEV_URL = "http://localhost:5173";
+const APP_NAME = "Moon For Oracle";
+const APP_ICON = path.join(app.getAppPath(), "assets", "icon.png");
 
 function createWindow(): BrowserWindow {
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const workArea = display.workArea;
+
   const win = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    x: workArea.x,
+    y: workArea.y,
+    width: workArea.width,
+    height: workArea.height,
     minWidth: 800,
     minHeight: 600,
     show: false, // Mostra só quando pronto — evita flicker
-    title: "GavaDB",
+    title: APP_NAME,
+    icon: APP_ICON,
+    frame: false,
+    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -21,6 +31,7 @@ function createWindow(): BrowserWindow {
     },
   });
 
+  win.maximize();
   win.once("ready-to-show", () => win.show());
 
   registerIpcHandlers(win);

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { ConnectionStatus } from "@gavadb/types";
 
 interface ToolbarProps {
@@ -41,8 +42,36 @@ export function Toolbar({
   isConnected,
   transactionBusy,
 }: ToolbarProps) {
+  const [isMaximized, setIsMaximized] = useState(true);
+
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+
+    if (window.gavadb) {
+      window.gavadb.windowIsMaximized().then((result) => {
+        if (result.success) setIsMaximized(result.data);
+      });
+      cleanup = window.gavadb.onWindowMaximizedChanged(setIsMaximized);
+    }
+
+    return cleanup;
+  }, []);
+
+  const handleMinimize = () => {
+    void window.gavadb?.windowMinimize();
+  };
+
+  const handleToggleMaximize = async () => {
+    const result = await window.gavadb?.windowToggleMaximize();
+    if (result?.success) setIsMaximized(result.data);
+  };
+
+  const handleClose = () => {
+    void window.gavadb?.windowClose();
+  };
+
   return (
-    <div style={{
+    <div className="app-toolbar" style={{
       height: "var(--toolbar-height)",
       background: "var(--bg-secondary)",
       borderBottom: "1px solid var(--border-color)",
@@ -53,7 +82,7 @@ export function Toolbar({
       flexShrink: 0,
     }}>
       <span style={{ fontWeight: 600, fontSize: 14, color: "var(--accent)", marginRight: 8 }}>
-        GavaDB
+        Moon For Oracle
       </span>
 
       <div style={{ width: 1, height: 18, background: "var(--border-color)", marginRight: 4 }} />
@@ -97,6 +126,7 @@ export function Toolbar({
       )}
 
       <button
+        className="app-no-drag"
         onClick={onCommit}
         disabled={!isConnected || !hasPendingTransaction || !!transactionBusy}
         style={{
@@ -109,6 +139,7 @@ export function Toolbar({
         Commit
       </button>
       <button
+        className="app-no-drag"
         onClick={onRollback}
         disabled={!isConnected || !hasPendingTransaction || !!transactionBusy}
         style={{
@@ -122,14 +153,15 @@ export function Toolbar({
       </button>
 
       {isConnected ? (
-        <button onClick={onDisconnect} disabled={!!transactionBusy}>Disconnect</button>
+        <button className="app-no-drag" onClick={onDisconnect} disabled={!!transactionBusy}>Disconnect</button>
       ) : (
-        <button onClick={onConnect}>Connect...</button>
+        <button className="app-no-drag" onClick={onConnect}>Connect...</button>
       )}
 
       <div style={{ width: 1, height: 18, background: "var(--border-color)" }} />
 
       <button
+        className="app-no-drag"
         onClick={onExecuteSql}
         disabled={!isConnected}
         style={{
@@ -142,6 +174,7 @@ export function Toolbar({
         ▶ Execute
       </button>
       <button
+        className="app-no-drag"
         onClick={onExecuteAllSql}
         disabled={!isConnected}
         style={{
@@ -153,6 +186,23 @@ export function Toolbar({
       >
         Execute All
       </button>
+
+      <div className="app-window-controls app-no-drag" aria-label="Window controls">
+        <button type="button" onClick={handleMinimize} aria-label="Minimize window" title="Minimize">
+          _
+        </button>
+        <button
+          type="button"
+          onClick={handleToggleMaximize}
+          aria-label={isMaximized ? "Restore window" : "Maximize window"}
+          title={isMaximized ? "Restore" : "Maximize"}
+        >
+          {isMaximized ? "▢" : "□"}
+        </button>
+        <button type="button" onClick={handleClose} aria-label="Close window" title="Close">
+          ×
+        </button>
+      </div>
     </div>
   );
 }

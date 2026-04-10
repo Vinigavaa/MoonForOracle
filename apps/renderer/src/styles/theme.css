@@ -69,6 +69,49 @@ button:disabled {
   cursor: default;
 }
 
+.app-toolbar {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.app-no-drag,
+button,
+input,
+select,
+textarea {
+  -webkit-app-region: no-drag;
+}
+
+.app-window-controls {
+  display: flex;
+  align-items: stretch;
+  align-self: stretch;
+  margin: 0 -12px 0 4px;
+}
+
+.app-window-controls button {
+  width: 46px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s;
+}
+
+.app-window-controls button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.app-window-controls button:last-child:hover {
+  background: var(--danger);
+  color: var(--bg-primary);
+}
+
 textarea {
   font-family: var(--font-mono);
   font-size: var(--font-size-base);
