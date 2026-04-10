@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import type {
   AppError,
+  CountRowsResponse,
   MutationResult,
   SqlExecutionResponse,
   UpdateRowRequest,
@@ -13,6 +14,11 @@ interface ExecutionResult {
 
 interface MutationExecutionResult {
   data?: MutationResult;
+  error?: string;
+}
+
+interface CountRowsResult {
+  data?: CountRowsResponse;
   error?: string;
 }
 
@@ -51,7 +57,20 @@ export function useSqlExecution() {
     }
   }, []);
 
-  return { execute, updateRows };
+  const countRows = useCallback(async (sql: string): Promise<CountRowsResult> => {
+    try {
+      const res = await window.gavadb.dbCountRows({ sql: sql.trim() });
+      if (res.success) {
+        return { data: res.data };
+      }
+      return { error: formatError(res.error) };
+    } catch (err) {
+      console.error("[SQL Execution] countRows failed", err);
+      return { error: formatUnknownError(err) };
+    }
+  }, []);
+
+  return { execute, updateRows, countRows };
 }
 
 function formatError(err: AppError): string {

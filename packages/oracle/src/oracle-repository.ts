@@ -50,6 +50,7 @@ export interface DatabaseRepository {
   disconnect(): Promise<void>;
   testConnection(): Promise<boolean>;
   executeQuery(request: SqlExecutionRequest): Promise<SqlExecutionResponse>;
+  countQueryRows(sql: string): Promise<{ totalRows: number; executionTimeMs: number }>;
   updateRows(request: UpdateRowRequest[]): Promise<MutationResult>;
   deleteRows(request: DeleteRowsRequest): Promise<MutationResult>;
   commitTransaction(): Promise<MutationResult>;
@@ -350,6 +351,26 @@ export class OracleRepository implements DatabaseRepository {
       rowsAffected: 0,
       editable,
     };
+  }
+
+  async countQueryRows(sql: string): Promise<{ totalRows: number; executionTimeMs: number }> {
+    const conn = this.requireConnection();
+    const cleanSql = sql.replace(/;\s*$/, "").trim();
+    const countSql = `SELECT COUNT(*) AS CNT FROM (${cleanSql})`;
+    const start = performance.now();
+
+    try {
+      const result = await conn.execute(
+        countSql,
+        {},
+        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+      );
+      const rows = (result.rows ?? []) as Array<{ CNT: number }>;
+      const totalRows = rows[0]?.CNT ?? 0;
+      return { totalRows, executionTimeMs: Math.round(performance.now() - start) };
+    } catch (err) {
+      throw normalizeOracleError(err);
+    }
   }
 
   async listObjects(type: DatabaseObjectType): Promise<DatabaseObjectSummary[]> {

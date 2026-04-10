@@ -1,5 +1,7 @@
 import type { DatabaseRepository } from "@gavadb/oracle";
 import type {
+  CountRowsRequest,
+  CountRowsResponse,
   MutationResult,
   SqlExecutionRequest,
   SqlExecutionResponse,
@@ -31,4 +33,11 @@ export async function rollbackTransaction(repo: DatabaseRepository): Promise<voi
 
 export async function getTransactionState(repo: DatabaseRepository): Promise<TransactionState> {
   return repo.getTransactionState();
+}
+
+export async function countRows(
+  repo: DatabaseRepository,
+  request: CountRowsRequest,
+): Promise<CountRowsResponse> {
+  return repo.countQueryRows(request.sql);
 }

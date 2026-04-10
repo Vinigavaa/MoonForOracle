@@ -8,6 +8,7 @@ import type {
   TnsFileRequest,
   DatabaseObjectType,
   SqlExecutionRequest,
+  CountRowsRequest,
   UpdateRowRequest,
   SaveConnectionRequest,
 } from "@gavadb/types";
@@ -21,6 +22,9 @@ contextBridge.exposeInMainWorld("gavadb", {
 
   dbExecuteQuery: (request: SqlExecutionRequest) =>
     ipcRenderer.invoke(IPC_CHANNELS.DB_EXECUTE_QUERY, request),
+
+  dbCountRows: (request: CountRowsRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.DB_COUNT_ROWS, request),
 
   dbUpdateRows: (request: UpdateRowRequest[]) =>
     ipcRenderer.invoke(IPC_CHANNELS.DB_UPDATE_ROWS, request),

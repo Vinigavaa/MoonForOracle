@@ -7,6 +7,7 @@ import type { DatabaseRepository } from "@gavadb/oracle";
 import type {
   ConnectionConfig,
   SqlExecutionRequest,
+  CountRowsRequest,
   DatabaseObjectType,
   AppError,
   IpcResult,
@@ -172,6 +173,16 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       return ok(result);
     } catch (err) {
       const appError = logIpcError(IPC_CHANNELS.DB_EXECUTE_QUERY, err);
+      return fail(appError);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DB_COUNT_ROWS, async (_event, request: CountRowsRequest) => {
+    try {
+      const result = await useCases.countRows(repo, request);
+      return ok(result);
+    } catch (err) {
+      const appError = logIpcError(IPC_CHANNELS.DB_COUNT_ROWS, err);
       return fail(appError);
     }
   });

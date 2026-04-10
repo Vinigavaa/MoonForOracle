@@ -19,6 +19,7 @@ interface ResultPanelProps {
   onRefresh?: () => Promise<void>;
   onSaveChanges?: (request: UpdateRowRequest[]) => Promise<{ error?: string }>;
   onSort: (sort: SortState | null) => void;
+  onCountRows?: () => Promise<{ totalRows?: number; error?: string }>;
 }
 
 export const ResultPanel = memo(function ResultPanel({
@@ -35,6 +36,7 @@ export const ResultPanel = memo(function ResultPanel({
   onRefresh,
   onSaveChanges,
   onSort,
+  onCountRows,
 }: ResultPanelProps) {
   // When sorting, keep the grid visible (don't unmount) — show loading overlay via sorting prop
   if (executing && !sorting) {
@@ -91,6 +93,7 @@ export const ResultPanel = memo(function ResultPanel({
         onRefresh={onRefresh}
         onSaveChanges={onSaveChanges}
         onSort={onSort}
+        onCountRows={onCountRows}
       />
     );
   }

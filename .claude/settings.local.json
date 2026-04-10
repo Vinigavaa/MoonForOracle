@@ -26,7 +26,8 @@
       "Bash(node -e \"try{const m=require\\('codemirror'\\);console.log\\(Object.keys\\(m\\).join\\(', '\\)\\)}catch\\(e\\){console.log\\(e.message\\)}\")",
       "Bash(ls:*)",
       "Bash(node -e \"const o=require\\('oracledb'\\); console.log\\('version:', o.versionString, 'thin:', o.thin\\)\")",
-      "Bash(xargs wc:*)"
+      "Bash(xargs wc:*)",
+      "Bash(npx turbo:*)"
     ]
   }
 }

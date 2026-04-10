@@ -81,7 +81,7 @@
   --font-size-sm: 12px;
   --font-size-base: 13px;
 
-  --radius: 4px;
+  --radius: 0;
 }
 
 *,

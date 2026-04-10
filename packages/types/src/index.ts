@@ -10,6 +10,8 @@ export type {
   SqlExecutionRequest,
   SqlStatementType,
   SqlExecutionResponse,
+  CountRowsRequest,
+  CountRowsResponse,
 } from "./query";
 export type { AppError, AppErrorCode } from "./error";
 export type { IpcResult } from "./ipc-result";

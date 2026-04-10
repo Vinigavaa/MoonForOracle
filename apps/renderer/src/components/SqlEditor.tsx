@@ -90,7 +90,7 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
   const [splitRatio, setSplitRatio] = useState(0.4);
   const containerRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
-  const { execute: executeSql, updateRows } = useSqlExecution();
+  const { execute: executeSql, updateRows, countRows } = useSqlExecution();
   const { resolveObject } = useObjectResolver(isConnected);
   const toast = useToastContext();
   const editorRef = useRef<SqlCodeEditorHandle | null>(null);
@@ -444,6 +444,14 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
     }
   }, [resultTabs, activeTabId, updateResultTab, executeSql, toast, recoverUiState]);
 
+  const handleCountRows = useCallback(async (): Promise<{ totalRows?: number; error?: string }> => {
+    const sql = activeResultTab.executedSql?.trim();
+    if (!sql) return { error: "No query to count" };
+    const result = await countRows(sql);
+    if (result.data) return { totalRows: result.data.totalRows };
+    return { error: result.error ?? "Failed to count rows" };
+  }, [activeResultTab.executedSql, countRows]);
+
   executeTriggerRef.current = executeActive;
   executeAllTriggerRef.current = executeAll;
 
@@ -666,6 +674,7 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
           onRefresh={refreshActive}
           onSaveChanges={handleSaveChanges}
           onSort={handleSort}
+          onCountRows={handleCountRows}
         />
       </div>
     </div>

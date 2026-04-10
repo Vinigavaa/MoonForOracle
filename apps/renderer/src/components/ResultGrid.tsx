@@ -19,6 +19,7 @@ interface ResultGridProps {
   onRefresh?: () => Promise<void>;
   onSaveChanges?: (request: UpdateRowRequest[]) => Promise<{ error?: string }>;
   onSort?: (sort: SortState | null) => void;
+  onCountRows?: () => Promise<{ totalRows?: number; error?: string }>;
 }
 
 interface PendingRowChange {
@@ -81,6 +82,7 @@ export const ResultGrid = memo(function ResultGrid({
   onRefresh,
   onSaveChanges,
   onSort,
+  onCountRows,
 }: ResultGridProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
@@ -90,6 +92,9 @@ export const ResultGrid = memo(function ResultGrid({
   const [selectedCell, setSelectedCell] = useState<CellPosition | null>(null);
   const [editingCell, setEditingCell] = useState<CellPosition | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [countingRows, setCountingRows] = useState(false);
+  const [totalRowCount, setTotalRowCount] = useState<number | null>(null);
+  const [countError, setCountError] = useState<string | null>(null);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -104,6 +109,8 @@ export const ResultGrid = memo(function ResultGrid({
     setSelectedCell(null);
     setEditingCell(null);
     setEditValue("");
+    setTotalRowCount(null);
+    setCountError(null);
   }, [result]);
 
   const onScroll = useCallback(() => {
@@ -231,6 +238,24 @@ export const ResultGrid = memo(function ResultGrid({
       console.error("[ResultGrid] Save changes flow failed", error);
     }
   }, [canEditRows, editableInfo, onRefresh, onSaveChanges, pendingChanges, pendingRowIndexes]);
+
+  const handleCountRows = useCallback(async () => {
+    if (!onCountRows || countingRows) return;
+    setCountingRows(true);
+    setCountError(null);
+    try {
+      const res = await onCountRows();
+      if (res.error) {
+        setCountError(res.error);
+      } else if (res.totalRows != null) {
+        setTotalRowCount(res.totalRows);
+      }
+    } catch {
+      setCountError("Failed to count rows");
+    } finally {
+      setCountingRows(false);
+    }
+  }, [onCountRows, countingRows]);
 
   // ─── Keyboard navigation ─────────────────────────────────────────
 
@@ -366,6 +391,12 @@ export const ResultGrid = memo(function ResultGrid({
         <button onClick={cancelPendingChanges} disabled={pendingRowIndexes.length === 0 || !!mutating} style={secondaryButtonStyle}>
           Discard Changes
         </button>
+        {onCountRows && result.statementType === "select" && result.rowCount > 0 && (
+          <button onClick={handleCountRows} disabled={countingRows} style={secondaryButtonStyle}>
+            {countingRows ? "Counting..." : totalRowCount != null ? `Total: ${totalRowCount.toLocaleString()} rows` : "Count Rows"}
+          </button>
+        )}
+        {countError && <span style={countErrorStyle}>{countError}</span>}
         <span style={toolbarInfoStyle}>
           {canEditRows
             ? pendingRowIndexes.length > 0
@@ -547,3 +578,5 @@ const selectedCellStyle: React.CSSProperties = { outline: "2px solid var(--focus
 const editingCellStyle: React.CSSProperties = { outline: "2px solid var(--focus-color)", outlineOffset: -2, background: "var(--cell-editing-bg)", padding: 2 };
 const inputStyle: React.CSSProperties = { width: "100%", height: INPUT_HEIGHT, padding: "0 6px", background: "var(--grid-bg)", border: "1px solid var(--focus-color)", borderRadius: 4, color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: "var(--font-size-sm)", outline: "none" };
 const nullCellStyle: React.CSSProperties = { color: "var(--text-muted)", fontStyle: "italic" };
+const countResultStyle: React.CSSProperties = { color: "var(--accent)", fontWeight: 600 };
+const countErrorStyle: React.CSSProperties = { color: "var(--danger)", fontSize: 11 };

@@ -130,9 +130,9 @@ export function Toolbar({
         onClick={onCommit}
         disabled={!isConnected || !hasPendingTransaction || !!transactionBusy}
         style={{
-          background: hasPendingTransaction ? "var(--button-primary-bg)" : "transparent",
-          color: hasPendingTransaction ? "var(--button-primary-text)" : undefined,
-          border: hasPendingTransaction ? "none" : "1px solid var(--border-color)",
+          background: "transparent",
+          color: hasPendingTransaction ? "var(--success)" : undefined,
+          border: "1px solid var(--border-color)",
           fontWeight: 600,
         }}
       >

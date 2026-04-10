@@ -12,6 +12,8 @@ import type {
   MutationResult,
   SqlExecutionRequest,
   SqlExecutionResponse,
+  CountRowsRequest,
+  CountRowsResponse,
   ObjectDetailResponse,
   UpdateRowRequest,
   AppError,
@@ -26,6 +28,7 @@ export interface IpcMainHandlers {
   "db:connect": (config: ConnectionConfig) => Promise<IpcResult<void>>;
   "db:disconnect": () => Promise<IpcResult<void>>;
   "db:execute-query": (request: SqlExecutionRequest) => Promise<IpcResult<SqlExecutionResponse>>;
+  "db:count-rows": (request: CountRowsRequest) => Promise<IpcResult<CountRowsResponse>>;
   "db:update-rows": (request: UpdateRowRequest[]) => Promise<IpcResult<MutationResult>>;
   "db:commit": () => Promise<IpcResult<MutationResult>>;
   "db:rollback": () => Promise<IpcResult<void>>;
@@ -60,6 +63,7 @@ export const IPC_CHANNELS = {
   DB_CONNECT: "db:connect",
   DB_DISCONNECT: "db:disconnect",
   DB_EXECUTE_QUERY: "db:execute-query",
+  DB_COUNT_ROWS: "db:count-rows",
   DB_UPDATE_ROWS: "db:update-rows",
   DB_COMMIT: "db:commit",
   DB_ROLLBACK: "db:rollback",
@@ -90,6 +94,7 @@ export interface GavaDbApi {
   dbConnect: (config: ConnectionConfig) => Promise<IpcResult<void>>;
   dbDisconnect: () => Promise<IpcResult<void>>;
   dbExecuteQuery: (request: SqlExecutionRequest) => Promise<IpcResult<SqlExecutionResponse>>;
+  dbCountRows: (request: CountRowsRequest) => Promise<IpcResult<CountRowsResponse>>;
   dbUpdateRows: (request: UpdateRowRequest[]) => Promise<IpcResult<MutationResult>>;
   dbCommit: () => Promise<IpcResult<MutationResult>>;
   dbRollback: () => Promise<IpcResult<void>>;

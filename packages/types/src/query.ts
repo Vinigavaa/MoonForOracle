@@ -34,6 +34,17 @@ export interface MutationResult {
   rowsAffected: number;
 }
 
+/** Request para contagem total de linhas de uma query */
+export interface CountRowsRequest {
+  sql: string;
+}
+
+/** Response da contagem total de linhas */
+export interface CountRowsResponse {
+  totalRows: number;
+  executionTimeMs: number;
+}
+
 /** Request para execução de SQL via IPC */
 export interface SqlExecutionRequest {
   sql: string;
@@ -46,6 +57,7 @@ export interface SqlExecutionRequest {
 }
 
 /** Tipo de statement SQL detectado */
+
 export type SqlStatementType = "select" | "dml" | "ddl" | "plsql" | "unknown";
 
 /** Response padronizada de execução de SQL */
