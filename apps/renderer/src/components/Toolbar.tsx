@@ -23,9 +23,9 @@ const STATUS_LABELS: Record<ConnectionStatus, string> = {
 };
 
 const STATUS_COLORS: Record<ConnectionStatus, string> = {
-  disconnected: "var(--text-muted)",
+  disconnected: "var(--status-disconnected)",
   connecting: "var(--warning)",
-  connected: "var(--success)",
+  connected: "var(--status-connected)",
   error: "var(--danger)",
 };
 
@@ -73,7 +73,7 @@ export function Toolbar({
   return (
     <div className="app-toolbar" style={{
       height: "var(--toolbar-height)",
-      background: "var(--bg-secondary)",
+      background: "var(--topbar-bg)",
       borderBottom: "1px solid var(--border-color)",
       display: "flex",
       alignItems: "center",
@@ -115,11 +115,11 @@ export function Toolbar({
       {isConnected && (
         <span style={{
           padding: "2px 8px",
-          border: `1px solid ${hasPendingTransaction ? "rgba(250, 179, 135, 0.45)" : "var(--border-color)"}`,
-          color: hasPendingTransaction ? "var(--warning)" : "var(--text-muted)",
+          border: `1px solid ${hasPendingTransaction ? "var(--status-pending)" : "var(--border-color)"}`,
+          color: hasPendingTransaction ? "var(--status-pending)" : "var(--text-muted)",
           fontSize: 11,
           fontWeight: 600,
-          background: hasPendingTransaction ? "rgba(250, 179, 135, 0.08)" : "transparent",
+          background: hasPendingTransaction ? "var(--selected-bg)" : "transparent",
         }}>
           {hasPendingTransaction ? "Pending transaction" : "No pending transaction"}
         </span>
@@ -130,8 +130,8 @@ export function Toolbar({
         onClick={onCommit}
         disabled={!isConnected || !hasPendingTransaction || !!transactionBusy}
         style={{
-          background: hasPendingTransaction ? "var(--accent)" : "transparent",
-          color: hasPendingTransaction ? "var(--bg-primary)" : undefined,
+          background: hasPendingTransaction ? "var(--button-primary-bg)" : "transparent",
+          color: hasPendingTransaction ? "var(--button-primary-text)" : undefined,
           border: hasPendingTransaction ? "none" : "1px solid var(--border-color)",
           fontWeight: 600,
         }}
@@ -165,8 +165,8 @@ export function Toolbar({
         onClick={onExecuteSql}
         disabled={!isConnected}
         style={{
-          background: isConnected ? "var(--accent)" : undefined,
-          color: isConnected ? "var(--bg-primary)" : undefined,
+          background: isConnected ? "var(--button-primary-bg)" : undefined,
+          color: isConnected ? "var(--button-primary-text)" : undefined,
           border: "none",
           fontWeight: 600,
         }}

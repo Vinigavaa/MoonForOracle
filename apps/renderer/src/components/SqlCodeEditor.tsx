@@ -57,9 +57,9 @@ function buildCmTheme(cfg: EditorThemeConfig) {
     },
     ".cm-gutters": {
       background: cfg.bgGutter,
-      color: "#6c7086",
+      color: cfg.textPlaceholder,
       border: "none",
-      borderRight: "1px solid rgba(255,255,255,0.06)",
+      borderRight: "1px solid var(--divider-color)",
       fontSize: `${Math.max(cfg.fontSize - 2, 10)}px`,
       minWidth: "3.5em",
     },
@@ -69,19 +69,19 @@ function buildCmTheme(cfg: EditorThemeConfig) {
       textAlign: "right",
     },
     ".cm-activeLineGutter": {
-      background: "rgba(255,255,255,0.04)",
+      background: cfg.activeLine,
       color: cfg.cursor,
     },
     ".cm-activeLine": { background: cfg.activeLine },
     "&.cm-focused": { outline: "none" },
-    ".cm-placeholder": { color: "#6c7086" },
+    ".cm-placeholder": { color: cfg.textPlaceholder },
     // Search panel styling
     ".cm-panels": {
       background: cfg.bgGutter,
-      borderBottom: "1px solid rgba(255,255,255,0.08)",
+      borderBottom: "1px solid var(--divider-color)",
     },
     ".cm-panels.cm-panels-top": {
-      borderBottom: "1px solid rgba(255,255,255,0.08)",
+      borderBottom: "1px solid var(--divider-color)",
     },
     ".cm-search": {
       padding: "6px 10px",
@@ -98,7 +98,7 @@ function buildCmTheme(cfg: EditorThemeConfig) {
     ".cm-search input": {
       background: cfg.bgEditor,
       color: cfg.textDefault,
-      border: "1px solid rgba(255,255,255,0.12)",
+      border: "1px solid var(--border-color)",
       borderRadius: "3px",
       padding: "2px 6px",
       outline: "none",
@@ -109,24 +109,26 @@ function buildCmTheme(cfg: EditorThemeConfig) {
     ".cm-search button": {
       background: "transparent",
       color: cfg.textDefault,
-      border: "1px solid rgba(255,255,255,0.12)",
+      border: "1px solid var(--border-color)",
       borderRadius: "3px",
       padding: "2px 8px",
       cursor: "pointer",
     },
     ".cm-search button:hover": {
-      background: "rgba(255,255,255,0.06)",
+      background: "var(--hover-bg)",
     },
     ".cm-search label": {
-      color: "#6c7086",
+      color: cfg.textPlaceholder,
       fontSize: `${cfg.fontSize - 1}px`,
     },
     ".cm-searchMatch": {
-      background: "rgba(250, 179, 135, 0.25)",
+      background: "var(--status-pending)",
+      color: "var(--app-bg)",
       borderRadius: "2px",
     },
     ".cm-searchMatch.cm-searchMatch-selected": {
-      background: "rgba(250, 179, 135, 0.45)",
+      background: "var(--warning)",
+      color: "var(--app-bg)",
     },
   }, { dark: cfg.baseTheme === "dark" });
 }
@@ -134,17 +136,17 @@ function buildCmTheme(cfg: EditorThemeConfig) {
 function buildHighlightStyle(cfg: EditorThemeConfig) {
   return syntaxHighlighting(HighlightStyle.define([
     { tag: tags.keyword, color: cfg.textKeyword, fontWeight: "bold" },
-    { tag: tags.operatorKeyword, color: "#f9a8d4", fontWeight: "bold" },
-    { tag: tags.controlKeyword, color: "#facc15", fontWeight: "bold" },
-    { tag: tags.definitionKeyword, color: "#a78bfa", fontWeight: "bold" },
-    { tag: tags.operator, color: "#93c5fd" },
+    { tag: tags.operatorKeyword, color: cfg.textOperator, fontWeight: "bold" },
+    { tag: tags.controlKeyword, color: cfg.textKeyword, fontWeight: "bold" },
+    { tag: tags.definitionKeyword, color: cfg.textKeyword, fontWeight: "bold" },
+    { tag: tags.operator, color: cfg.textOperator },
     { tag: tags.string, color: cfg.textString },
     { tag: tags.number, color: cfg.textNumber },
     { tag: [tags.lineComment, tags.blockComment], color: cfg.textComment, fontStyle: "italic" },
     { tag: tags.typeName, color: cfg.textKeyword },
     { tag: tags.bool, color: cfg.textNumber },
-    { tag: tags.null, color: "#f38ba8", fontStyle: "italic" },
-    { tag: tags.punctuation, color: "#bac2de" },
+    { tag: tags.null, color: cfg.danger, fontStyle: "italic" },
+    { tag: tags.punctuation, color: cfg.textPunctuation },
     { tag: [tags.name, tags.variableName, tags.propertyName], color: cfg.textIdentifier },
   ]));
 }
@@ -162,14 +164,14 @@ function showGoToLineDialog(view: EditorView) {
     position: absolute; top: 0; left: 0; right: 0; z-index: 10;
     display: flex; align-items: center; gap: 6px;
     padding: 6px 10px;
-    background: var(--bg-secondary, #181825);
-    border-bottom: 1px solid rgba(255,255,255,0.08);
+    background: var(--editor-gutter-bg);
+    border-bottom: 1px solid var(--divider-color);
     font-size: 12px;
   `;
 
   const label = document.createElement("span");
   label.textContent = "Go to line:";
-  label.style.color = "#6c7086";
+  label.style.color = "var(--text-placeholder)";
 
   const input = document.createElement("input");
   input.type = "number";
@@ -178,9 +180,9 @@ function showGoToLineDialog(view: EditorView) {
   input.placeholder = `1–${view.state.doc.lines}`;
   input.style.cssText = `
     width: 80px; padding: 2px 6px;
-    background: var(--bg-primary, #1e1e2e);
-    color: var(--text-primary, #cdd6f4);
-    border: 1px solid rgba(255,255,255,0.12);
+    background: var(--editor-bg);
+    color: var(--editor-text);
+    border: 1px solid var(--border-color);
     border-radius: 3px; font-size: 12px; outline: none;
   `;
 

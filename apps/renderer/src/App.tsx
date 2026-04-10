@@ -5,7 +5,7 @@ import { Sidebar } from "./components/Sidebar";
 import { TabPanel, type Tab } from "./components/TabPanel";
 import { SqlEditor } from "./components/SqlEditor";
 import { ObjectViewer } from "./components/ObjectViewer";
-import { PreferencesPanel } from "./components/PreferencesPanel";
+import { ThemePreferencesPanel } from "./components/ThemePreferencesPanel";
 import { ConnectionDialog } from "./components/ConnectionDialog";
 import { useConnection } from "./hooks/useConnection";
 import { useSavedConnections } from "./hooks/useSavedConnections";
@@ -308,7 +308,7 @@ export function App() {
             />
           )}
 
-          {activeTab === PREFS_TAB_ID && <PreferencesPanel />}
+          {activeTab === PREFS_TAB_ID && <ThemePreferencesPanel />}
         </TabPanel>
       </div>
 

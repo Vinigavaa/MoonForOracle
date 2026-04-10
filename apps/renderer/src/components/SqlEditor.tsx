@@ -515,7 +515,7 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
       <div style={{
         display: "flex",
         alignItems: "stretch",
-        background: "var(--bg-secondary)",
+        background: "var(--tab-bar-bg)",
         borderBottom: "1px solid var(--border-subtle)",
         flexShrink: 0,
         height: 30,
@@ -533,7 +533,7 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
                 alignItems: "center",
                 gap: 4,
                 padding: "0 10px",
-                background: isActive ? "var(--bg-primary)" : "transparent",
+                background: isActive ? "var(--tab-active-bg)" : "transparent",
                 border: "none",
                 borderBottom: isActive ? "2px solid var(--accent)" : "2px solid transparent",
                 borderRadius: 0,
@@ -585,7 +585,7 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
           padding: "3px 12px",
           fontSize: 11,
           color: "var(--text-muted)",
-          background: "var(--bg-secondary)",
+          background: "var(--panel-bg)",
           borderBottom: "1px solid var(--border-subtle)",
           display: "flex",
           justifyContent: "space-between",
@@ -603,7 +603,7 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
           padding: "3px 12px",
           fontSize: 11,
           color: "var(--text-muted)",
-          background: "var(--bg-primary)",
+          background: "var(--panel-bg)",
           borderBottom: "1px solid var(--border-subtle)",
           flexShrink: 0,
           minHeight: 24,
@@ -696,5 +696,4 @@ function normalizeSortError(column: string, message?: string): string {
   }
   return `${fallback} ${message}`;
 }
-
 

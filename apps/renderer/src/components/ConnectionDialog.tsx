@@ -474,7 +474,7 @@ const overlayStyle: React.CSSProperties = {
 };
 
 const dialogStyle: React.CSSProperties = {
-  background: "var(--bg-secondary)",
+  background: "var(--modal-bg)",
   border: "1px solid var(--border-color)",
   borderRadius: 8, width: 620, maxWidth: "94vw",
   padding: 24, boxShadow: "0 16px 48px rgba(0, 0, 0, 0.4)",
@@ -506,27 +506,27 @@ const inputStyle = (fieldError?: string): React.CSSProperties => ({
 
 const errorBoxStyle: React.CSSProperties = {
   marginTop: 14, padding: "8px 10px",
-  background: "rgba(243, 139, 168, 0.1)",
-  border: "1px solid rgba(243, 139, 168, 0.25)",
+  background: "var(--selected-bg)",
+  border: "1px solid var(--danger)",
   borderRadius: "var(--radius)",
   fontSize: "var(--font-size-sm)", color: "var(--danger)",
 };
 
 const hintBoxStyle: React.CSSProperties = {
   marginTop: 6, padding: "4px 8px",
-  background: "rgba(137, 180, 250, 0.06)",
+  background: "var(--selected-bg)",
   borderRadius: "var(--radius)",
   fontSize: 11, color: "var(--text-secondary)", lineHeight: 1.5,
 };
 
 const connectBtnStyle: React.CSSProperties = {
-  background: "var(--accent)", color: "var(--bg-primary)",
+  background: "var(--button-primary-bg)", color: "var(--button-primary-text)",
   border: "none", fontWeight: 600, padding: "6px 20px",
 };
 
 const secondaryBtnStyle: React.CSSProperties = {
-  background: "transparent",
-  color: "var(--text-primary)",
+  background: "var(--button-secondary-bg)",
+  color: "var(--button-secondary-text)",
   border: "1px solid var(--border-color)",
   fontWeight: 600,
   padding: "6px 16px",

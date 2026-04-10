@@ -70,7 +70,7 @@ export function Sidebar({
   return (
     <div style={{
       width: "var(--sidebar-width)",
-      background: "var(--bg-secondary)",
+      background: "var(--sidebar-bg)",
       borderRight: "1px solid var(--border-color)",
       display: "flex",
       flexDirection: "column",
@@ -114,7 +114,7 @@ export function Sidebar({
               width: "100%",
               padding: "4px 8px",
               fontSize: 11,
-              background: "var(--bg-primary)",
+              background: "var(--panel-bg)",
               color: "var(--text-primary)",
               border: "1px solid var(--border-color)",
               borderRadius: "var(--radius)",
@@ -244,8 +244,8 @@ function SavedConnectionsSection({
                       alignItems: "center",
                       gap: 4,
                       padding: "4px 8px 4px 18px",
-                      background: isActive ? "rgba(166, 227, 161, 0.06)" : "transparent",
-                      borderLeft: isActive ? "2px solid var(--success)" : "2px solid transparent",
+                      background: isActive ? "var(--selected-bg)" : "transparent",
+                      borderLeft: isActive ? "2px solid var(--status-connected)" : "2px solid transparent",
                     }}
                   >
                     {/* Favorite star */}
@@ -261,7 +261,7 @@ function SavedConnectionsSection({
                     <span style={{
                       flex: 1,
                       fontSize: 12,
-                      color: isActive ? "var(--success)" : "var(--text-primary)",
+                      color: isActive ? "var(--status-connected)" : "var(--text-primary)",
                       fontWeight: isActive ? 600 : 400,
                       overflow: "hidden",
                       textOverflow: "ellipsis",
@@ -272,7 +272,7 @@ function SavedConnectionsSection({
 
                     {/* Action buttons */}
                     {isActive ? (
-                      <span style={{ fontSize: 10, color: "var(--success)", fontWeight: 600, flexShrink: 0 }}>
+                      <span style={{ fontSize: 10, color: "var(--status-connected)", fontWeight: 600, flexShrink: 0 }}>
                         {"\u2022"} Active
                       </span>
                     ) : (
@@ -386,7 +386,7 @@ const detailsPopoverStyle: React.CSSProperties = {
   zIndex: 100,
   width: 260,
   padding: 12,
-  background: "var(--bg-secondary)",
+  background: "var(--popup-bg)",
   border: "1px solid var(--border-color)",
   borderRadius: 6,
   boxShadow: "0 8px 24px rgba(0,0,0,0.35)",

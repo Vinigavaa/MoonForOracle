@@ -1,5 +1,58 @@
 /* Reset mínimo e variáveis de tema — base para toda a UI */
 :root {
+  --app-bg: #1e1e2e;
+  --sidebar-bg: #181825;
+  --topbar-bg: #181825;
+  --tab-bar-bg: #181825;
+  --tab-active-bg: #1e1e2e;
+  --panel-bg: #1e1e2e;
+  --surface-bg: #252536;
+  --result-viewer-bg: #1e1e2e;
+  --grid-bg: #1e1e2e;
+  --grid-header-bg: #252536;
+  --grid-alt-row-bg: #252536;
+  --modal-bg: #181825;
+  --popup-bg: #181825;
+  --hover-bg: #2e2e42;
+  --selected-bg: rgba(137, 180, 250, 0.12);
+  --active-bg: #3b3b54;
+  --focus-color: #89b4fa;
+  --text-title: #cdd6f4;
+  --text-placeholder: #6c7086;
+  --divider-color: #2a2a3c;
+  --button-primary-bg: #89b4fa;
+  --button-primary-text: #11111b;
+  --button-secondary-bg: #252536;
+  --button-secondary-text: #cdd6f4;
+  --button-disabled-bg: #252536;
+  --button-disabled-text: #6c7086;
+  --info: #89b4fa;
+  --status-connected: #a6e3a1;
+  --status-disconnected: #6c7086;
+  --status-pending: #fab387;
+  --cell-selected-bg: rgba(137, 180, 250, 0.12);
+  --cell-editing-bg: rgba(137, 180, 250, 0.18);
+  --cell-modified-bg: rgba(125, 211, 252, 0.14);
+  --row-pending-bg: rgba(125, 211, 252, 0.06);
+  --scrollbar-track: #181825;
+  --scrollbar-thumb: #3b3b54;
+  --scrollbar-thumb-hover: #6c7086;
+  --code-viewer-bg: #1e1e2e;
+  --editor-bg: #1e1e2e;
+  --editor-gutter-bg: #181825;
+  --editor-text: #cdd6f4;
+  --syntax-keyword: #7dd3fc;
+  --syntax-string: #a6e3a1;
+  --syntax-number: #fab387;
+  --syntax-comment: #6c7086;
+  --syntax-identifier: #cdd6f4;
+  --syntax-operator: #93c5fd;
+  --syntax-punctuation: #bac2de;
+  --editor-active-line: rgba(255, 255, 255, 0.04);
+  --text-selection-bg: rgba(137, 180, 250, 0.18);
+  --text-selection-color: #cdd6f4;
+  --editor-cursor: #89b4fa;
+
   --bg-primary: #1e1e2e;
   --bg-secondary: #181825;
   --bg-surface: #252536;
@@ -54,19 +107,21 @@ button {
   cursor: pointer;
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
-  background: var(--bg-surface);
-  color: var(--text-primary);
+  background: var(--button-secondary-bg);
+  color: var(--button-secondary-text);
   padding: 4px 12px;
   transition: background 0.15s;
 }
 
 button:hover:not(:disabled) {
-  background: var(--bg-hover);
+  background: var(--hover-bg);
 }
 
 button:disabled {
   opacity: 0.4;
   cursor: default;
+  background: var(--button-disabled-bg);
+  color: var(--button-disabled-text);
 }
 
 .app-toolbar {
@@ -115,7 +170,7 @@ textarea {
 textarea {
   font-family: var(--font-mono);
   font-size: var(--font-size-base);
-  background: var(--bg-secondary);
+  background: var(--editor-bg);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
@@ -124,7 +179,7 @@ textarea {
 }
 
 textarea:focus {
-  border-color: var(--accent);
+  border-color: var(--focus-color);
 }
 
 ::-webkit-scrollbar {
@@ -133,16 +188,16 @@ textarea:focus {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
+  background: var(--scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--bg-active);
+  background: var(--scrollbar-thumb);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  background: var(--scrollbar-thumb-hover);
 }
 
 @keyframes pulse {
@@ -166,6 +221,16 @@ input {
 }
 
 input:focus {
-  border-color: var(--accent) !important;
+  border-color: var(--focus-color) !important;
   outline: none;
+}
+
+::selection {
+  background: var(--text-selection-bg);
+  color: var(--text-selection-color);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-placeholder);
 }

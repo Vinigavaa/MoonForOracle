@@ -355,7 +355,7 @@ export const ResultGrid = memo(function ResultGrid({
 
   return (
     <div
-      style={{ display: "flex", flexDirection: "column", height: "100%" }}
+      style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--result-viewer-bg)" }}
       onKeyDown={handleGridKeyDown}
       tabIndex={0}
     >
@@ -377,7 +377,7 @@ export const ResultGrid = memo(function ResultGrid({
         {(mutating || sorting) && <span style={loadingStyle}>{sorting ? "Sorting..." : "Applying changes..."}</span>}
       </div>
 
-      <div ref={scrollRef} onScroll={onScroll} style={{ flex: 1, overflow: "auto" }}>
+      <div ref={scrollRef} onScroll={onScroll} style={{ flex: 1, overflow: "auto", background: "var(--grid-bg)" }}>
         <table ref={tableRef} style={tableStyle}>
           <thead>
             <tr style={{ height: headerHeight }}>
@@ -407,8 +407,8 @@ export const ResultGrid = memo(function ResultGrid({
                   style={{
                     height: ROW_HEIGHT,
                     background: hasRowChanges
-                      ? "rgba(125, 211, 252, 0.04)"
-                      : rowIdx % 2 === 0 ? "transparent" : "var(--bg-surface)",
+                      ? "var(--row-pending-bg)"
+                      : rowIdx % 2 === 0 ? "transparent" : "var(--grid-alt-row-bg)",
                   }}
                 >
                   <td style={{
@@ -528,22 +528,22 @@ function isEditableCellValue(value: unknown): boolean {
 
 const emptyStateStyle: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--text-muted)", fontSize: "var(--font-size-sm)" };
 const tableStyle: React.CSSProperties = { width: "100%", borderCollapse: "collapse", fontSize: "var(--font-size-sm)", fontFamily: "var(--font-mono)", tableLayout: "auto" };
-const toolbarStyle: React.CSSProperties = { padding: "6px 12px", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid var(--border-color)", background: "var(--bg-secondary)", flexShrink: 0 };
+const toolbarStyle: React.CSSProperties = { padding: "6px 12px", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid var(--border-color)", background: "var(--panel-bg)", flexShrink: 0 };
 const toolbarInfoStyle: React.CSSProperties = { fontSize: 11, color: "var(--text-muted)" };
 const loadingStyle: React.CSSProperties = { fontSize: 11, color: "var(--accent)", animation: "pulse 1s infinite", marginLeft: "auto" };
-const statusBarStyle: React.CSSProperties = { padding: "4px 12px", fontSize: 11, color: "var(--text-muted)", borderTop: "1px solid var(--border-color)", background: "var(--bg-secondary)", flexShrink: 0, display: "flex", alignItems: "center", gap: 12 };
+const statusBarStyle: React.CSSProperties = { padding: "4px 12px", fontSize: 11, color: "var(--text-muted)", borderTop: "1px solid var(--border-color)", background: "var(--panel-bg)", flexShrink: 0, display: "flex", alignItems: "center", gap: 12 };
 const mutedItalicStyle: React.CSSProperties = { color: "var(--text-muted)", fontStyle: "italic" };
-const primaryButtonStyle: React.CSSProperties = { padding: "3px 10px", fontSize: 11, background: "var(--accent)", color: "var(--bg-primary)", border: "none", borderRadius: "var(--radius)", fontWeight: 600 };
-const secondaryButtonStyle: React.CSSProperties = { padding: "3px 10px", fontSize: 11, background: "transparent", border: "1px solid var(--border-color)", borderRadius: "var(--radius)", color: "var(--text-secondary)" };
+const primaryButtonStyle: React.CSSProperties = { padding: "3px 10px", fontSize: 11, background: "var(--button-primary-bg)", color: "var(--button-primary-text)", border: "none", borderRadius: "var(--radius)", fontWeight: 600 };
+const secondaryButtonStyle: React.CSSProperties = { padding: "3px 10px", fontSize: 11, background: "var(--button-secondary-bg)", border: "1px solid var(--border-color)", borderRadius: "var(--radius)", color: "var(--button-secondary-text)" };
 const loadMoreButtonStyle: React.CSSProperties = { padding: "1px 10px", fontSize: 11, background: "transparent", border: "1px solid var(--accent)", borderRadius: "var(--radius)", color: "var(--accent)", cursor: "pointer" };
-const rowNumHeaderStyle: React.CSSProperties = { position: "sticky", top: 0, padding: "6px 10px", textAlign: "right", background: "var(--bg-surface)", borderBottom: "1px solid var(--border-color)", borderRight: "1px solid var(--border-subtle)", color: "var(--text-muted)", fontWeight: 400, fontSize: 11, width: 1, whiteSpace: "nowrap", zIndex: 1 };
-const sortableColHeaderStyle: React.CSSProperties = { position: "sticky", top: 0, padding: "6px 12px", textAlign: "left", background: "var(--bg-surface)", borderBottom: "1px solid var(--border-color)", color: "var(--accent)", fontWeight: 600, whiteSpace: "nowrap", zIndex: 1, cursor: "pointer", userSelect: "none" };
+const rowNumHeaderStyle: React.CSSProperties = { position: "sticky", top: 0, padding: "6px 10px", textAlign: "right", background: "var(--grid-header-bg)", borderBottom: "1px solid var(--border-color)", borderRight: "1px solid var(--border-subtle)", color: "var(--text-muted)", fontWeight: 400, fontSize: 11, width: 1, whiteSpace: "nowrap", zIndex: 1 };
+const sortableColHeaderStyle: React.CSSProperties = { position: "sticky", top: 0, padding: "6px 12px", textAlign: "left", background: "var(--grid-header-bg)", borderBottom: "1px solid var(--border-color)", color: "var(--accent)", fontWeight: 600, whiteSpace: "nowrap", zIndex: 1, cursor: "pointer", userSelect: "none" };
 const sortArrowStyle: React.CSSProperties = { fontSize: 10, marginLeft: 2 };
 const columnTypeStyle: React.CSSProperties = { color: "var(--text-muted)", fontWeight: 400, marginLeft: 6, fontSize: 11 };
 const rowNumCellStyle: React.CSSProperties = { padding: "4px 10px", textAlign: "right", borderBottom: "1px solid var(--border-subtle)", borderRight: "1px solid var(--border-subtle)", color: "var(--text-muted)", fontSize: 11, userSelect: "none", whiteSpace: "nowrap" };
 const dataCellStyle: React.CSSProperties = { padding: "4px 12px", borderBottom: "1px solid var(--border-subtle)", color: "var(--text-secondary)", whiteSpace: "nowrap", maxWidth: 400, overflow: "hidden", textOverflow: "ellipsis", cursor: "default" };
-const changedCellStyle: React.CSSProperties = { background: "rgba(125, 211, 252, 0.12)", boxShadow: "inset 0 0 0 1px rgba(125, 211, 252, 0.28)", color: "var(--text-primary)" };
-const selectedCellStyle: React.CSSProperties = { outline: "2px solid var(--accent)", outlineOffset: -2, background: "rgba(137, 180, 250, 0.08)" };
-const editingCellStyle: React.CSSProperties = { outline: "2px solid var(--accent)", outlineOffset: -2, padding: 2 };
-const inputStyle: React.CSSProperties = { width: "100%", height: INPUT_HEIGHT, padding: "0 6px", background: "var(--bg-primary)", border: "1px solid var(--accent)", borderRadius: 4, color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: "var(--font-size-sm)", outline: "none" };
+const changedCellStyle: React.CSSProperties = { background: "var(--cell-modified-bg)", boxShadow: "inset 0 0 0 1px var(--focus-color)", color: "var(--text-primary)" };
+const selectedCellStyle: React.CSSProperties = { outline: "2px solid var(--focus-color)", outlineOffset: -2, background: "var(--cell-selected-bg)" };
+const editingCellStyle: React.CSSProperties = { outline: "2px solid var(--focus-color)", outlineOffset: -2, background: "var(--cell-editing-bg)", padding: 2 };
+const inputStyle: React.CSSProperties = { width: "100%", height: INPUT_HEIGHT, padding: "0 6px", background: "var(--grid-bg)", border: "1px solid var(--focus-color)", borderRadius: 4, color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: "var(--font-size-sm)", outline: "none" };
 const nullCellStyle: React.CSSProperties = { color: "var(--text-muted)", fontStyle: "italic" };

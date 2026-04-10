@@ -53,8 +53,8 @@ export const ResultPanel = memo(function ResultPanel({
       <div style={{ padding: 16, height: "100%", overflow: "auto" }}>
         <div style={{
           padding: 12,
-          background: "rgba(243, 139, 168, 0.08)",
-          border: "1px solid rgba(243, 139, 168, 0.2)",
+          background: "var(--selected-bg)",
+          border: "1px solid var(--danger)",
           borderRadius: "var(--radius)",
           fontSize: "var(--font-size-sm)",
           fontFamily: "var(--font-mono)",

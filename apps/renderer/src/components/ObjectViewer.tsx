@@ -17,12 +17,12 @@ const TYPE_LABELS: Record<DatabaseObjectType, string> = {
 };
 
 const TYPE_COLORS: Record<DatabaseObjectType, string> = {
-  tables: "#89b4fa",
-  views: "#a6e3a1",
-  triggers: "#fab387",
-  packages: "#cba6f7",
-  procedures: "#f9a8d4",
-  functions: "#f38ba8",
+  tables: "var(--focus-color)",
+  views: "var(--success)",
+  triggers: "var(--warning)",
+  packages: "var(--info)",
+  procedures: "var(--text-secondary)",
+  functions: "var(--danger)",
 };
 
 export function ObjectViewer({ objectType, objectName }: ObjectViewerProps) {
@@ -41,7 +41,7 @@ export function ObjectViewer({ objectType, objectName }: ObjectViewerProps) {
         padding: "6px 14px",
         fontSize: 12,
         color: "var(--text-secondary)",
-        background: "var(--bg-secondary)",
+        background: "var(--panel-bg)",
         borderBottom: "1px solid var(--border-subtle)",
         display: "flex",
         alignItems: "center",
@@ -57,9 +57,9 @@ export function ObjectViewer({ objectType, objectName }: ObjectViewerProps) {
             textTransform: "uppercase",
             letterSpacing: "0.04em",
             borderRadius: 3,
-            background: `${TYPE_COLORS[objectType]}18`,
+            background: "var(--selected-bg)",
             color: TYPE_COLORS[objectType],
-            border: `1px solid ${TYPE_COLORS[objectType]}30`,
+            border: `1px solid ${TYPE_COLORS[objectType]}`,
             whiteSpace: "nowrap",
           }}>
             {displayLabel}
@@ -76,7 +76,7 @@ export function ObjectViewer({ objectType, objectName }: ObjectViewerProps) {
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, overflow: "auto", background: "var(--bg-primary)" }}>
+      <div style={{ flex: 1, overflow: "auto", background: "var(--code-viewer-bg)" }}>
         {loading && (
           <div style={centeredStyle}>
             <span style={{ animation: "pulse 1s infinite" }}>Loading...</span>
@@ -149,7 +149,7 @@ function ViewView({ detail }: { detail: Extract<ObjectDetailResponse, { kind: "v
             padding: "6px 14px",
             fontSize: 11,
             color: "var(--text-muted)",
-            background: "var(--bg-secondary)",
+            background: "var(--panel-bg)",
             borderBottom: "1px solid var(--border-subtle)",
             fontWeight: 600,
           }}>
@@ -185,7 +185,7 @@ function ColumnTable({ columns }: { columns: ColumnInfo[] }) {
       </thead>
       <tbody>
         {columns.map((col, i) => (
-          <tr key={col.name} style={{ background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.02)" }}>
+          <tr key={col.name} style={{ background: i % 2 === 0 ? "transparent" : "var(--grid-alt-row-bg)" }}>
             <td style={{ ...tdStyle, color: "var(--text-muted)", width: 40, textAlign: "right" }}>
               {col.position}
             </td>
@@ -199,7 +199,7 @@ function ColumnTable({ columns }: { columns: ColumnInfo[] }) {
               {col.nullable ? (
                 <span style={{ color: "var(--text-muted)" }}>Yes</span>
               ) : (
-                <span style={{ color: "var(--warning, #fab387)", fontWeight: 500 }}>No</span>
+                <span style={{ color: "var(--warning)", fontWeight: 500 }}>No</span>
               )}
             </td>
           </tr>
@@ -239,8 +239,8 @@ const centeredStyle: React.CSSProperties = {
 
 const errorBoxStyle: React.CSSProperties = {
   padding: 12,
-  background: "rgba(243, 139, 168, 0.08)",
-  border: "1px solid rgba(243, 139, 168, 0.2)",
+  background: "var(--selected-bg)",
+  border: "1px solid var(--danger)",
   borderRadius: "var(--radius)",
   fontSize: "var(--font-size-sm)",
   fontFamily: "var(--font-mono)",

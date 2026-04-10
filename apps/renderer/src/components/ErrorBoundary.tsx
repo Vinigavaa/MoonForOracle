@@ -45,8 +45,8 @@ export class ErrorBoundary extends Component<Props, State> {
           </p>
           <div style={{
             padding: "8px 16px",
-            background: "rgba(243, 139, 168, 0.08)",
-            border: "1px solid rgba(243, 139, 168, 0.2)",
+            background: "var(--selected-bg)",
+            border: "1px solid var(--danger)",
             borderRadius: "var(--radius)",
             fontSize: 12,
             fontFamily: "var(--font-mono)",
@@ -61,8 +61,8 @@ export class ErrorBoundary extends Component<Props, State> {
             onClick={() => { this.setState({ error: null }); }}
             style={{
               padding: "8px 24px",
-              background: "var(--accent)",
-              color: "var(--bg-primary)",
+              background: "var(--button-primary-bg)",
+              color: "var(--button-primary-text)",
               border: "none",
               fontWeight: 600,
               fontSize: 13,

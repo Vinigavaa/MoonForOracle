@@ -1,7 +1,8 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useLayoutEffect, useState, type ReactNode } from "react";
 import {
   type EditorThemeConfig,
   DEFAULT_THEME,
+  applyThemeToDocument,
   loadTheme,
   saveTheme,
   resetTheme as resetThemeStorage,
@@ -21,6 +22,10 @@ const Ctx = createContext<EditorThemeContextValue>({
 
 export function EditorThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<EditorThemeConfig>(loadTheme);
+
+  useLayoutEffect(() => {
+    applyThemeToDocument(theme);
+  }, [theme]);
 
   const updateTheme = useCallback((patch: Partial<EditorThemeConfig>) => {
     setTheme((prev) => {

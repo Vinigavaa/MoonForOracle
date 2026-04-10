@@ -65,7 +65,7 @@ const containerStyle: React.CSSProperties = {
 const cardStyle: React.CSSProperties = {
   border: "1px solid var(--border-color)",
   borderRadius: "var(--radius)",
-  background: "var(--bg-primary)",
+  background: "var(--panel-bg)",
   overflow: "hidden",
 };
 
@@ -75,7 +75,7 @@ const headerStyle: React.CSSProperties = {
   alignItems: "center",
   padding: "10px 12px",
   borderBottom: "1px solid var(--border-subtle)",
-  background: "var(--bg-secondary)",
+  background: "var(--panel-bg)",
 };
 
 const titleStyle: React.CSSProperties = {
@@ -104,7 +104,7 @@ const sqlPreviewStyle: React.CSSProperties = {
   margin: 0,
   padding: 12,
   borderBottom: "1px solid var(--border-subtle)",
-  background: "var(--bg-surface)",
+  background: "var(--surface-bg)",
   color: "var(--text-secondary)",
   fontFamily: "var(--font-mono)",
   fontSize: 11,

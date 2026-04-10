@@ -15,7 +15,7 @@ const ICON: Record<ToastType, string> = {
 const COLORS: Record<ToastType, { border: string; icon: string }> = {
   success: { border: "var(--success)", icon: "var(--success)" },
   error: { border: "var(--danger)", icon: "var(--danger)" },
-  info: { border: "var(--accent)", icon: "var(--accent)" },
+  info: { border: "var(--info)", icon: "var(--info)" },
   warning: { border: "var(--warning)", icon: "var(--warning)" },
 };
 
@@ -44,7 +44,7 @@ export function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
               alignItems: "flex-start",
               gap: 8,
               padding: "10px 14px",
-              background: "var(--bg-surface)",
+              background: "var(--popup-bg)",
               border: `1px solid ${color.border}`,
               borderLeft: `3px solid ${color.border}`,
               borderRadius: "var(--radius)",
