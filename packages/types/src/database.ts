@@ -7,10 +7,26 @@ export type DatabaseObjectType =
   | "procedures"
   | "functions";
 
+export type OracleObjectKind =
+  | "TABLE"
+  | "VIEW"
+  | "TRIGGER"
+  | "PACKAGE"
+  | "PROCEDURE"
+  | "FUNCTION";
+
 /** Resumo de um objeto do banco — listagem leve sem código-fonte */
 export interface DatabaseObjectSummary {
   name: string;
   type: DatabaseObjectType;
+  schema: string;
+  status?: "VALID" | "INVALID";
+}
+
+export interface DatabaseObjectSuggestion {
+  name: string;
+  type: DatabaseObjectType;
+  objectKind: OracleObjectKind;
   schema: string;
   status?: "VALID" | "INVALID";
 }
@@ -25,11 +41,44 @@ export interface ColumnInfo {
   position: number;
 }
 
+export interface ConstraintColumnInfo {
+  name: string;
+  position: number;
+}
+
+export interface ForeignKeyColumnMapping {
+  position: number;
+  localColumn: string;
+  referencedColumn: string;
+}
+
+export interface PrimaryKeyDetail {
+  constraintName: string;
+  columns: ConstraintColumnInfo[];
+}
+
+export interface ForeignKeyDetail {
+  constraintName: string;
+  referencedSchema: string;
+  referencedTable: string;
+  columns: ForeignKeyColumnMapping[];
+}
+
+export interface IncomingReferenceDetail {
+  constraintName: string;
+  sourceSchema: string;
+  sourceTable: string;
+  columns: ForeignKeyColumnMapping[];
+}
+
 /** Detalhe estruturado de uma tabela */
 export interface TableDetail {
   kind: "table";
   objectName: string;
   columns: ColumnInfo[];
+  primaryKey: PrimaryKeyDetail | null;
+  foreignKeys: ForeignKeyDetail[];
+  referencedBy: IncomingReferenceDetail[];
 }
 
 /** Detalhe estruturado de uma view */

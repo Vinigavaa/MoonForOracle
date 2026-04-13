@@ -1,4 +1,4 @@
-import { forwardRef, memo, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, memo, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { countRender } from "../lib/perfLog";
 import { Compartment, EditorState, Transaction } from "@codemirror/state";
 import { EditorView, keymap, placeholder as cmPlaceholder, lineNumbers, highlightActiveLine, highlightActiveLineGutter } from "@codemirror/view";
@@ -7,6 +7,8 @@ import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import { search, openSearchPanel, closeSearchPanel } from "@codemirror/search";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import type { DatabaseObjectSuggestion } from "@gavadb/types";
+import { extractObjectReferenceAtCursor, type SqlObjectReference } from "@gavadb/utils";
 import type { SqlEditorExecutionSnapshot } from "../lib/sqlExecutionTarget";
 import { buildExecutionSnapshot } from "../lib/sqlExecutionTarget";
 import type { EditorThemeConfig } from "../lib/editorTheme";
@@ -19,10 +21,22 @@ interface SqlCodeEditorProps {
   onExecute?: () => void;
   onExecuteAll?: () => void;
   onOpenObject?: (name: string) => void | Promise<void>;
+  onSearchObjectsByPrefix?: (prefix: string, limit?: number) => Promise<DatabaseObjectSuggestion[]>;
   onExecutionContextChange?: (snapshot: SqlEditorExecutionSnapshot) => void;
   disabled?: boolean;
   readOnly?: boolean;
   placeholder?: string;
+}
+
+interface AutocompleteState {
+  open: boolean;
+  loading: boolean;
+  items: DatabaseObjectSuggestion[];
+  selectedIndex: number;
+  query: string;
+  top: number;
+  left: number;
+  target: SqlObjectReference | null;
 }
 
 export interface SqlCodeEditorHandle {
@@ -266,6 +280,7 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
   onExecute,
   onExecuteAll,
   onOpenObject,
+  onSearchObjectsByPrefix,
   onExecutionContextChange,
   disabled,
   readOnly,
@@ -279,6 +294,7 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
   const onExecuteRef = useRef(onExecute);
   const onExecuteAllRef = useRef(onExecuteAll);
   const onOpenObjectRef = useRef(onOpenObject);
+  const onSearchObjectsByPrefixRef = useRef(onSearchObjectsByPrefix);
   const onExecutionContextChangeRef = useRef(onExecutionContextChange);
   const disabledRef = useRef(disabled);
   const readOnlyRef = useRef(readOnly || disabled);
@@ -293,11 +309,34 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
   const parsedStatementsRef = useRef(buildExecutionSnapshot(value, 0, 0, 0).statements);
   const parsedDocRef = useRef(value);
   const parseTimeoutRef = useRef<number | null>(null);
+  const autocompleteRequestRef = useRef(0);
+  const autocompleteRef = useRef<AutocompleteState>({
+    open: false,
+    loading: false,
+    items: [],
+    selectedIndex: 0,
+    query: "",
+    top: 0,
+    left: 0,
+    target: null,
+  });
+  const [autocomplete, setAutocomplete] = useState<AutocompleteState>({
+    open: false,
+    loading: false,
+    items: [],
+    selectedIndex: 0,
+    query: "",
+    top: 0,
+    left: 0,
+    target: null,
+  });
+  autocompleteRef.current = autocomplete;
 
   onChangeRef.current = onChange;
   onExecuteRef.current = onExecute;
   onExecuteAllRef.current = onExecuteAll;
   onOpenObjectRef.current = onOpenObject;
+  onSearchObjectsByPrefixRef.current = onSearchObjectsByPrefix;
   onExecutionContextChangeRef.current = onExecutionContextChange;
   disabledRef.current = disabled;
   readOnlyRef.current = readOnly || disabled;
@@ -343,6 +382,114 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
     }, 300);
   }
 
+  function closeAutocomplete() {
+    autocompleteRequestRef.current += 1;
+    setAutocomplete((current) => current.open ? {
+      open: false,
+      loading: false,
+      items: [],
+      selectedIndex: 0,
+      query: "",
+      top: 0,
+      left: 0,
+      target: null,
+    } : current);
+  }
+
+  function moveAutocompleteSelection(delta: number) {
+    setAutocomplete((current) => {
+      if (!current.open || current.items.length === 0) return current;
+      const nextIndex = (current.selectedIndex + delta + current.items.length) % current.items.length;
+      return { ...current, selectedIndex: nextIndex };
+    });
+  }
+
+  function applyAutocompleteSuggestion(view: EditorView, suggestion: DatabaseObjectSuggestion) {
+    setAutocomplete((current) => {
+      if (!current.target) return current;
+
+      view.dispatch({
+        changes: {
+          from: current.target.object.from,
+          to: current.target.object.to,
+          insert: suggestion.name,
+        },
+        selection: { anchor: current.target.object.from + suggestion.name.length },
+        scrollIntoView: true,
+      });
+
+      window.requestAnimationFrame(() => view.focus());
+
+      return {
+        open: false,
+        loading: false,
+        items: [],
+        selectedIndex: 0,
+        query: "",
+        top: 0,
+        left: 0,
+        target: null,
+      };
+    });
+  }
+
+  async function triggerPrefixAutocomplete(view: EditorView) {
+    const searchFn = onSearchObjectsByPrefixRef.current;
+    if (!searchFn || disabledRef.current || readOnlyRef.current) {
+      closeAutocomplete();
+      return true;
+    }
+
+    const cursor = view.state.selection.main.head;
+    const document = view.state.doc.toString();
+    const target = extractObjectReferenceAtCursor(document, cursor);
+    if (!target) {
+      closeAutocomplete();
+      return true;
+    }
+
+    const coords = view.coordsAtPos(target.object.to) ?? view.coordsAtPos(cursor);
+    const containerRect = containerRef.current?.getBoundingClientRect();
+    const left = coords && containerRect ? coords.left - containerRect.left : 12;
+    const top = coords && containerRect ? coords.bottom - containerRect.top + 6 : 36;
+    const query = target.qualifier ? `${target.qualifier.text}.${target.object.text}` : target.object.text;
+    const requestId = ++autocompleteRequestRef.current;
+
+    setAutocomplete({
+      open: true,
+      loading: true,
+      items: [],
+      selectedIndex: 0,
+      query,
+      top,
+      left,
+      target,
+    });
+
+    try {
+      const items = await searchFn(query, 20);
+      if (autocompleteRequestRef.current !== requestId) return true;
+
+      setAutocomplete((current) => {
+        if (!current.open || current.query !== query) return current;
+        return {
+          ...current,
+          loading: false,
+          items,
+          selectedIndex: 0,
+        };
+      });
+    } catch {
+      if (autocompleteRequestRef.current !== requestId) return true;
+      setAutocomplete((current) => {
+        if (!current.open || current.query !== query) return current;
+        return { ...current, loading: false, items: [], selectedIndex: 0 };
+      });
+    }
+
+    return true;
+  }
+
   useImperativeHandle(ref, () => ({
     getExecutionSnapshot: () => {
       const view = viewRef.current;
@@ -370,17 +517,10 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
     return navigator.platform.includes("Mac") ? event.metaKey : event.ctrlKey;
   }
 
-  function getWordAtMouseEvent(view: EditorView, event: MouseEvent) {
+  function getObjectReferenceAtMouseEvent(view: EditorView, event: MouseEvent) {
     const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
     if (pos == null) return null;
-
-    const word = view.state.wordAt(pos);
-    if (!word) return null;
-
-    const text = view.state.sliceDoc(word.from, word.to).trim();
-    if (!/^[A-Za-z_][A-Za-z0-9_$#]*$/.test(text)) return null;
-
-    return text;
+    return extractObjectReferenceAtCursor(view.state.doc.toString(), pos);
   }
 
   function updateHoverFeedback(event: MouseEvent) {
@@ -391,8 +531,8 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
       return;
     }
 
-    const word = getWordAtMouseEvent(view, event);
-    if (!word) {
+    const objectRef = getObjectReferenceAtMouseEvent(view, event);
+    if (!objectRef) {
       clearHoverFeedback();
       return;
     }
@@ -402,7 +542,7 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
       hoveredElementRef.current = target;
     }
 
-    hoveredWordRef.current = word;
+    hoveredWordRef.current = objectRef.text;
     target.style.textDecoration = "underline";
     target.style.cursor = "pointer";
   }
@@ -426,7 +566,45 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
         {
           key: "Tab",
           run: (view) => {
+            const currentAutocomplete = autocompleteRef.current;
+            if (currentAutocomplete.open && currentAutocomplete.items.length > 0) {
+              applyAutocompleteSuggestion(view, currentAutocomplete.items[currentAutocomplete.selectedIndex]);
+              return true;
+            }
             view.dispatch(view.state.replaceSelection("  "));
+            return true;
+          },
+        },
+        {
+          key: "Enter",
+          run: (view) => {
+            const currentAutocomplete = autocompleteRef.current;
+            if (!currentAutocomplete.open || currentAutocomplete.items.length === 0) return false;
+            applyAutocompleteSuggestion(view, currentAutocomplete.items[currentAutocomplete.selectedIndex]);
+            return true;
+          },
+        },
+        {
+          key: "Escape",
+          run: () => {
+            if (!autocompleteRef.current.open) return false;
+            closeAutocomplete();
+            return true;
+          },
+        },
+        {
+          key: "ArrowDown",
+          run: () => {
+            if (!autocompleteRef.current.open) return false;
+            moveAutocompleteSelection(1);
+            return true;
+          },
+        },
+        {
+          key: "ArrowUp",
+          run: () => {
+            if (!autocompleteRef.current.open) return false;
+            moveAutocompleteSelection(-1);
             return true;
           },
         },
@@ -434,6 +612,14 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
           key: "Ctrl-g",
           mac: "Cmd-g",
           run: (view) => { showGoToLineDialog(view); return true; },
+        },
+        {
+          key: "Ctrl-.",
+          mac: "Cmd-.",
+          run: (view) => {
+            void triggerPrefixAutocomplete(view);
+            return true;
+          },
         },
       ]),
       history(),
@@ -449,10 +635,12 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
       highlightCompartmentRef.current.of(buildHighlightStyle(themeConfig)),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
+          closeAutocomplete();
           onChangeRef.current?.(update.state.doc.toString());
           scheduleParsedStatementsRefresh(update.view);
         }
         if (update.selectionSet && !update.docChanged) {
+          closeAutocomplete();
           publishExecutionContext(update.view);
         }
       }),
@@ -486,18 +674,25 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
     };
     const handleClick = (event: MouseEvent) => {
       if (disabledRef.current || readOnlyRef.current || !isModifierPressed(event)) return;
-      const word = getWordAtMouseEvent(view, event);
-      if (!word) return;
+      const objectRef = getObjectReferenceAtMouseEvent(view, event);
+      if (!objectRef) return;
       event.preventDefault();
-      onOpenObjectRef.current?.(word);
+      onOpenObjectRef.current?.(objectRef.text);
+    };
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        closeAutocomplete();
+      }
     };
 
     view.dom.addEventListener("mousemove", handleMouseMove);
     view.dom.addEventListener("mouseleave", handleMouseLeave);
     view.dom.addEventListener("click", handleClick, true);
+    window.addEventListener("mousedown", handlePointerDown);
     window.addEventListener("keydown", handleKeyChange);
     window.addEventListener("keyup", handleKeyChange);
     window.addEventListener("blur", clearHoverFeedback);
+    window.addEventListener("blur", closeAutocomplete);
 
     return () => {
       if (parseTimeoutRef.current != null) {
@@ -509,9 +704,11 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
       view.dom.removeEventListener("mousemove", handleMouseMove);
       view.dom.removeEventListener("mouseleave", handleMouseLeave);
       view.dom.removeEventListener("click", handleClick, true);
+      window.removeEventListener("mousedown", handlePointerDown);
       window.removeEventListener("keydown", handleKeyChange);
       window.removeEventListener("keyup", handleKeyChange);
       window.removeEventListener("blur", clearHoverFeedback);
+      window.removeEventListener("blur", closeAutocomplete);
       view.destroy();
       viewRef.current = null;
     };
@@ -569,6 +766,82 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
         opacity: disabled ? 0.5 : 1,
         position: "relative",
       }}
-    />
+    >
+      {autocomplete.open && (
+        <div
+          style={{
+            position: "absolute",
+            top: autocomplete.top,
+            left: Math.max(8, autocomplete.left),
+            minWidth: 260,
+            maxWidth: 420,
+            maxHeight: 260,
+            overflowY: "auto",
+            background: "var(--popup-bg)",
+            border: "1px solid var(--border-color)",
+            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.28)",
+            zIndex: 20,
+          }}
+        >
+          {autocomplete.loading && (
+            <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-muted)" }}>
+              Searching objects...
+            </div>
+          )}
+
+          {!autocomplete.loading && autocomplete.items.length === 0 && (
+            <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-muted)" }}>
+              No objects found for <span style={{ color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>{autocomplete.query}</span>
+            </div>
+          )}
+
+          {!autocomplete.loading && autocomplete.items.map((item, index) => (
+            <button
+              key={`${item.objectKind}:${item.schema}:${item.name}`}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                const view = viewRef.current;
+                if (!view) return;
+                applyAutocompleteSuggestion(view, item);
+              }}
+              onMouseEnter={() => {
+                setAutocomplete((current) => current.open ? { ...current, selectedIndex: index } : current);
+              }}
+              style={{
+                width: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                padding: "8px 10px",
+                border: "none",
+                borderBottom: index === autocomplete.items.length - 1 ? "none" : "1px solid var(--border-subtle)",
+                background: index === autocomplete.selectedIndex ? "var(--selected-bg)" : "transparent",
+                color: "var(--text-primary)",
+                textAlign: "left",
+              }}
+            >
+              <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {item.name}
+                </span>
+                <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                  {item.schema}
+                </span>
+              </span>
+              <span style={{
+                flexShrink: 0,
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: "0.04em",
+                color: item.objectKind === "TABLE" ? "var(--focus-color)" : "var(--text-secondary)",
+              }}>
+                {item.objectKind}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }));

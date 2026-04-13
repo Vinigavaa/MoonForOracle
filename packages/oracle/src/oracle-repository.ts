@@ -16,9 +16,13 @@ import type {
   BindMetadata,
   DatabaseObjectType,
   DatabaseObjectSummary,
+  DatabaseObjectSuggestion,
   ObjectDetailResponse,
   ColumnInfo,
   TransactionState,
+  PrimaryKeyDetail,
+  ForeignKeyDetail,
+  IncomingReferenceDetail,
 } from "@gavadb/types";
 import { normalizeOracleError } from "./error-normalizer";
 import { buildOracleBinds, inferBindMetadata } from "./bind-inference";
@@ -29,6 +33,8 @@ import {
   getViewColumnsSql,
   getViewTextSql,
   getPackageSourceSql,
+  SEARCHABLE_OBJECT_KINDS,
+  oracleObjectKindToDatabaseType,
 } from "./queries";
 
 // ─── Modo Thin vs Thick ──────────────────────────────────────────────
@@ -60,6 +66,7 @@ export interface DatabaseRepository {
   rollbackTransaction(): Promise<void>;
   getTransactionState(): TransactionState;
   listObjects(type: DatabaseObjectType): Promise<DatabaseObjectSummary[]>;
+  searchObjects(prefix: string, limit?: number): Promise<DatabaseObjectSuggestion[]>;
   getObjectDetail(type: DatabaseObjectType, name: string): Promise<ObjectDetailResponse>;
   getConnectionInfo(): ConnectionConfig | null;
 }
@@ -410,6 +417,65 @@ export class OracleRepository implements DatabaseRepository {
     }
   }
 
+  async searchObjects(prefix: string, limit = 20): Promise<DatabaseObjectSuggestion[]> {
+    const conn = this.requireConnection();
+    const parsed = parseObjectSearchPrefix(prefix);
+    if (!parsed.objectPrefix) {
+      return [];
+    }
+
+    try {
+      const result = await conn.execute(
+        `
+          SELECT
+            owner AS schema,
+            object_name AS name,
+            object_type,
+            status
+          FROM all_objects
+          WHERE object_type IN (${SEARCHABLE_OBJECT_KINDS.map((kind) => `'${kind}'`).join(", ")})
+            AND object_name LIKE :namePrefix ESCAPE '\\'
+            AND (:schemaName IS NULL OR owner = :schemaName)
+            AND (:schemaName IS NOT NULL OR owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'))
+          ORDER BY
+            CASE object_type
+              WHEN 'TABLE' THEN 1
+              WHEN 'VIEW' THEN 2
+              WHEN 'PACKAGE' THEN 3
+              WHEN 'PROCEDURE' THEN 4
+              WHEN 'FUNCTION' THEN 5
+              WHEN 'TRIGGER' THEN 6
+              ELSE 99
+            END,
+            object_name
+          FETCH FIRST ${clampObjectSearchLimit(limit)} ROWS ONLY
+        `,
+        {
+          namePrefix: `${escapeLike(parsed.objectPrefix.toUpperCase())}%`,
+          schemaName: parsed.schema?.toUpperCase() ?? null,
+        },
+        { outFormat: oracledb.OUT_FORMAT_OBJECT },
+      );
+
+      const rows = (result.rows ?? []) as Array<{
+        SCHEMA: string;
+        NAME: string;
+        OBJECT_TYPE: "TABLE" | "VIEW" | "TRIGGER" | "PACKAGE" | "PROCEDURE" | "FUNCTION";
+        STATUS: "VALID" | "INVALID";
+      }>;
+
+      return rows.map((row) => ({
+        name: row.NAME,
+        schema: row.SCHEMA,
+        objectKind: row.OBJECT_TYPE,
+        type: oracleObjectKindToDatabaseType(row.OBJECT_TYPE),
+        status: row.STATUS,
+      }));
+    } catch (err) {
+      throw normalizeOracleError(err);
+    }
+  }
+
   async getObjectDetail(type: DatabaseObjectType, name: string): Promise<ObjectDetailResponse> {
     const conn = this.requireConnection();
 
@@ -444,10 +510,13 @@ export class OracleRepository implements DatabaseRepository {
   }
 
   private async fetchTableDetail(conn: Connection, name: string): Promise<ObjectDetailResponse> {
-    const result = await conn.execute(
-      getTableColumnsSql(name), {}, { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-    const rows = (result.rows ?? []) as Array<{
+    const [columnResult, primaryKey, foreignKeys, referencedBy] = await Promise.all([
+      conn.execute(getTableColumnsSql(name), {}, { outFormat: oracledb.OUT_FORMAT_OBJECT }),
+      this.getTablePrimaryKey(conn, name),
+      this.getOutgoingForeignKeys(conn, name),
+      this.getIncomingForeignKeys(conn, name),
+    ]);
+    const rows = (columnResult.rows ?? []) as Array<{
       COLUMN_NAME: string; DATA_TYPE: string; DATA_LENGTH: number;
       DATA_PRECISION: number | null; DATA_SCALE: number | null;
       NULLABLE: string; COLUMN_ID: number;
@@ -460,7 +529,7 @@ export class OracleRepository implements DatabaseRepository {
       position: r.COLUMN_ID,
     }));
 
-    return { kind: "table", objectName: name, columns };
+    return { kind: "table", objectName: name, columns, primaryKey, foreignKeys, referencedBy };
   }
 
   private async fetchViewDetail(conn: Connection, name: string): Promise<ObjectDetailResponse> {
@@ -576,6 +645,127 @@ export class OracleRepository implements DatabaseRepository {
 
     const rows = (result.rows ?? []) as Array<{ COLUMN_NAME: string }>;
     return rows.map((row) => row.COLUMN_NAME);
+  }
+
+  private async getTablePrimaryKey(conn: Connection, tableName: string): Promise<PrimaryKeyDetail | null> {
+    const result = await conn.execute(
+      `
+        SELECT
+          cons.constraint_name,
+          cols.column_name,
+          cols.position
+        FROM all_constraints cons
+        JOIN all_cons_columns cols
+          ON cols.owner = cons.owner
+         AND cols.constraint_name = cons.constraint_name
+        WHERE cons.constraint_type = 'P'
+          AND cons.owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+          AND cons.table_name = :tableName
+        ORDER BY cols.position
+      `,
+      { tableName: tableName.toUpperCase() },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+
+    const rows = (result.rows ?? []) as Array<{
+      CONSTRAINT_NAME: string;
+      COLUMN_NAME: string;
+      POSITION: number;
+    }>;
+    if (rows.length === 0) return null;
+
+    return {
+      constraintName: rows[0].CONSTRAINT_NAME,
+      columns: rows.map((row) => ({
+        name: row.COLUMN_NAME,
+        position: row.POSITION,
+      })),
+    };
+  }
+
+  private async getOutgoingForeignKeys(conn: Connection, tableName: string): Promise<ForeignKeyDetail[]> {
+    const result = await conn.execute(
+      `
+        SELECT
+          child.constraint_name,
+          child_cols.position,
+          child_cols.column_name AS local_column,
+          parent.owner AS referenced_schema,
+          parent.table_name AS referenced_table,
+          parent_cols.column_name AS referenced_column
+        FROM all_constraints child
+        JOIN all_cons_columns child_cols
+          ON child_cols.owner = child.owner
+         AND child_cols.constraint_name = child.constraint_name
+        JOIN all_constraints parent
+          ON parent.owner = child.r_owner
+         AND parent.constraint_name = child.r_constraint_name
+        JOIN all_cons_columns parent_cols
+          ON parent_cols.owner = parent.owner
+         AND parent_cols.constraint_name = parent.constraint_name
+         AND parent_cols.position = child_cols.position
+        WHERE child.constraint_type = 'R'
+          AND child.owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+          AND child.table_name = :tableName
+        ORDER BY child.constraint_name, child_cols.position
+      `,
+      { tableName: tableName.toUpperCase() },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+
+    const rows = (result.rows ?? []) as Array<{
+      CONSTRAINT_NAME: string;
+      POSITION: number;
+      LOCAL_COLUMN: string;
+      REFERENCED_SCHEMA: string;
+      REFERENCED_TABLE: string;
+      REFERENCED_COLUMN: string;
+    }>;
+
+    return groupOutgoingForeignKeyRows(rows);
+  }
+
+  private async getIncomingForeignKeys(conn: Connection, tableName: string): Promise<IncomingReferenceDetail[]> {
+    const result = await conn.execute(
+      `
+        SELECT
+          child.constraint_name,
+          child.owner AS source_schema,
+          child.table_name AS source_table,
+          child_cols.position,
+          child_cols.column_name AS local_column,
+          parent_cols.column_name AS referenced_column
+        FROM all_constraints parent
+        JOIN all_cons_columns parent_cols
+          ON parent_cols.owner = parent.owner
+         AND parent_cols.constraint_name = parent.constraint_name
+        JOIN all_constraints child
+          ON child.r_owner = parent.owner
+         AND child.r_constraint_name = parent.constraint_name
+         AND child.constraint_type = 'R'
+        JOIN all_cons_columns child_cols
+          ON child_cols.owner = child.owner
+         AND child_cols.constraint_name = child.constraint_name
+         AND child_cols.position = parent_cols.position
+        WHERE parent.constraint_type IN ('P', 'U')
+          AND parent.owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+          AND parent.table_name = :tableName
+        ORDER BY child.table_name, child.constraint_name, child_cols.position
+      `,
+      { tableName: tableName.toUpperCase() },
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+
+    const rows = (result.rows ?? []) as Array<{
+      CONSTRAINT_NAME: string;
+      SOURCE_SCHEMA: string;
+      SOURCE_TABLE: string;
+      POSITION: number;
+      LOCAL_COLUMN: string;
+      REFERENCED_COLUMN: string;
+    }>;
+
+    return groupIncomingForeignKeyRows(rows);
   }
 
   private async updateSingleRow(conn: Connection, change: UpdateRowRequest): Promise<number> {
@@ -791,6 +981,117 @@ function buildEqualityClause(columnName: string, bindName: string, value: unknow
 function clampPageSize(pageSize?: number): number {
   if (!pageSize || !Number.isFinite(pageSize)) return DEFAULT_PAGE_SIZE;
   return Math.max(1, Math.min(Math.floor(pageSize), MAX_PAGE_SIZE));
+}
+
+function clampObjectSearchLimit(limit?: number): number {
+  if (!limit || !Number.isFinite(limit)) return 20;
+  return Math.max(1, Math.min(Math.floor(limit), 50));
+}
+
+function parseObjectSearchPrefix(prefix: string): { schema: string | null; objectPrefix: string } {
+  const trimmed = prefix.trim().replace(/^"+|"+$/g, "");
+  if (!trimmed) return { schema: null, objectPrefix: "" };
+
+  const parts = trimmed.split(".");
+  if (parts.length >= 2) {
+    const schemaPart = parts[parts.length - 2] ?? "";
+    const objectPart = parts[parts.length - 1] ?? "";
+    return {
+      schema: normalizeIdentifierPart(schemaPart),
+      objectPrefix: normalizeIdentifierPart(objectPart),
+    };
+  }
+
+  return {
+    schema: null,
+    objectPrefix: normalizeIdentifierPart(parts[0] ?? ""),
+  };
+}
+
+function normalizeIdentifierPart(value: string): string {
+  return value.trim().replace(/^"+|"+$/g, "");
+}
+
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
+function groupOutgoingForeignKeyRows(rows: Array<{
+  CONSTRAINT_NAME: string;
+  POSITION: number;
+  LOCAL_COLUMN: string;
+  REFERENCED_SCHEMA: string;
+  REFERENCED_TABLE: string;
+  REFERENCED_COLUMN: string;
+}>): ForeignKeyDetail[] {
+  const grouped = new Map<string, ForeignKeyDetail>();
+
+  for (const row of rows) {
+    const current = grouped.get(row.CONSTRAINT_NAME);
+    if (!current) {
+      grouped.set(row.CONSTRAINT_NAME, {
+        constraintName: row.CONSTRAINT_NAME,
+        referencedSchema: row.REFERENCED_SCHEMA,
+        referencedTable: row.REFERENCED_TABLE,
+        columns: [{
+          position: row.POSITION,
+          localColumn: row.LOCAL_COLUMN,
+          referencedColumn: row.REFERENCED_COLUMN,
+        }],
+      });
+      continue;
+    }
+
+    current.columns.push({
+      position: row.POSITION,
+      localColumn: row.LOCAL_COLUMN,
+      referencedColumn: row.REFERENCED_COLUMN,
+    });
+  }
+
+  return Array.from(grouped.values()).map((entry) => ({
+    ...entry,
+    columns: [...entry.columns].sort((a, b) => a.position - b.position),
+  }));
+}
+
+function groupIncomingForeignKeyRows(rows: Array<{
+  CONSTRAINT_NAME: string;
+  POSITION: number;
+  LOCAL_COLUMN: string;
+  SOURCE_SCHEMA: string;
+  SOURCE_TABLE: string;
+  REFERENCED_COLUMN: string;
+}>): IncomingReferenceDetail[] {
+  const grouped = new Map<string, IncomingReferenceDetail>();
+
+  for (const row of rows) {
+    const current = grouped.get(row.CONSTRAINT_NAME);
+    if (!current) {
+      grouped.set(row.CONSTRAINT_NAME, {
+        constraintName: row.CONSTRAINT_NAME,
+        sourceSchema: row.SOURCE_SCHEMA,
+        sourceTable: row.SOURCE_TABLE,
+        columns: [{
+          position: row.POSITION,
+          localColumn: row.LOCAL_COLUMN,
+          referencedColumn: row.REFERENCED_COLUMN,
+        }],
+      });
+      continue;
+    }
+
+    current.columns.push({
+      position: row.POSITION,
+      localColumn: row.LOCAL_COLUMN,
+      referencedColumn: row.REFERENCED_COLUMN,
+    });
+  }
+
+  return Array.from(grouped.values()).map((entry) => ({
+    ...entry,
+    columns: [...entry.columns].sort((a, b) => a.position - b.position),
+  }));
 }
 
 /**

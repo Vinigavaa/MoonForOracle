@@ -292,6 +292,15 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     }
   });
 
+  ipcMain.handle(IPC_CHANNELS.DB_SEARCH_OBJECTS, async (_event, prefix: string, limit?: number) => {
+    try {
+      const objects = await useCases.searchObjects(repo, prefix, limit);
+      return ok(objects);
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.DB_SEARCH_OBJECTS, err));
+    }
+  });
+
   // --- Saved Connections handlers ---
 
   ipcMain.handle(IPC_CHANNELS.CONN_LIST_SAVED, async () => {

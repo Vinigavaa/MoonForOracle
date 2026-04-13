@@ -9,6 +9,7 @@ import type {
   TnsFileRequest,
   DatabaseObjectType,
   DatabaseObjectSummary,
+  DatabaseObjectSuggestion,
   MutationResult,
   SqlExecutionRequest,
   SqlExecutionResponse,
@@ -41,6 +42,7 @@ export interface IpcMainHandlers {
   "db:test-connection": (config: ConnectionConfig) => Promise<IpcResult<void>>;
   "db:list-objects": (type: DatabaseObjectType) => Promise<IpcResult<DatabaseObjectSummary[]>>;
   "db:get-source": (type: DatabaseObjectType, name: string) => Promise<IpcResult<ObjectDetailResponse>>;
+  "db:search-objects": (prefix: string, limit?: number) => Promise<IpcResult<DatabaseObjectSuggestion[]>>;
   "conn:list-saved": () => Promise<IpcResult<SavedConnection[]>>;
   "conn:get-with-password": (id: string) => Promise<IpcResult<SavedConnectionWithPassword>>;
   "conn:save": (request: SaveConnectionRequest) => Promise<IpcResult<SavedConnection>>;
@@ -77,6 +79,7 @@ export const IPC_CHANNELS = {
   DB_TEST_CONNECTION: "db:test-connection",
   DB_LIST_OBJECTS: "db:list-objects",
   DB_GET_SOURCE: "db:get-source",
+  DB_SEARCH_OBJECTS: "db:search-objects",
   DB_STATUS_CHANGED: "db:status-changed",
   DB_TRANSACTION_STATE_CHANGED: "db:transaction-state-changed",
   DB_ERROR: "db:error",
@@ -109,6 +112,7 @@ export interface GavaDbApi {
   dbTestConnection: (config: ConnectionConfig) => Promise<IpcResult<void>>;
   dbListObjects: (type: DatabaseObjectType) => Promise<IpcResult<DatabaseObjectSummary[]>>;
   dbGetSource: (type: DatabaseObjectType, name: string) => Promise<IpcResult<ObjectDetailResponse>>;
+  dbSearchObjects: (prefix: string, limit?: number) => Promise<IpcResult<DatabaseObjectSuggestion[]>>;
   connListSaved: () => Promise<IpcResult<SavedConnection[]>>;
   connGetWithPassword: (id: string) => Promise<IpcResult<SavedConnectionWithPassword>>;
   connSave: (request: SaveConnectionRequest) => Promise<IpcResult<SavedConnection>>;

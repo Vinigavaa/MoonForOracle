@@ -13,7 +13,9 @@ const OBJECT_TYPES: readonly DatabaseObjectType[] = [
 type ObjectIndex = Map<string, DatabaseObjectSummary>;
 
 function normalizeObjectName(name: string): string {
-  return name.trim().replace(/^"+|"+$/g, "").toUpperCase();
+  const trimmed = name.trim();
+  const objectPart = trimmed.includes(".") ? (trimmed.split(".").pop() ?? trimmed) : trimmed;
+  return objectPart.replace(/^"+|"+$/g, "").toUpperCase();
 }
 
 export function useObjectResolver(isConnected: boolean) {

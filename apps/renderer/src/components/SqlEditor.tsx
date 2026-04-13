@@ -578,6 +578,17 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
     }
   }, [isConnected, onOpenObject, resolveObject, toast]);
 
+  const handleSearchObjectsByPrefix = useCallback(async (prefix: string, limit?: number) => {
+    if (!isConnected) return [];
+
+    const result = await window.gavadb.dbSearchObjects(prefix, limit);
+    if (!result.success) {
+      throw new Error(result.error.message);
+    }
+
+    return result.data;
+  }, [isConnected]);
+
   const addTab = useCallback(() => {
     const t = createEditorState();
     setEditorTabs((prev) => [...prev, t]);
@@ -756,6 +767,7 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
           onExecuteAll={executeAll}
           onExecutionContextChange={(snapshot) => updateEditorTab(activeEditorTab.id, { currentExecutionSnapshot: snapshot })}
           onOpenObject={handleOpenObject}
+          onSearchObjectsByPrefix={handleSearchObjectsByPrefix}
           placeholder={isConnected
             ? "Type your SQL query here..."
             : "Connect to a database to start writing queries..."

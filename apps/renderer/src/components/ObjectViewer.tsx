@@ -1,4 +1,11 @@
-import type { DatabaseObjectType, ObjectDetailResponse, ColumnInfo } from "@gavadb/types";
+import type {
+  DatabaseObjectType,
+  ObjectDetailResponse,
+  ColumnInfo,
+  PrimaryKeyDetail,
+  ForeignKeyDetail,
+  IncomingReferenceDetail,
+} from "@gavadb/types";
 import { useObjectDetail } from "../hooks/useObjectDetail";
 import { SqlCodeEditor } from "./SqlCodeEditor";
 
@@ -115,16 +122,34 @@ function detectSourceKind(source: string, objectType: DatabaseObjectType): strin
 // ─── Table view ─────────────────────────────────────────────────────
 
 function TableView({ detail }: { detail: Extract<ObjectDetailResponse, { kind: "table" }> }) {
-  if (detail.columns.length === 0) {
-    return <div style={centeredStyle}><span style={{ fontStyle: "italic" }}>No columns found</span></div>;
-  }
-
   return (
-    <div style={{ padding: 14 }}>
-      <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 10 }}>
-        {detail.columns.length} column(s)
-      </div>
-      <ColumnTable columns={detail.columns} />
+    <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 16 }}>
+      <section>
+        <SectionHeader
+          title="Columns"
+          subtitle={detail.columns.length > 0 ? `${detail.columns.length} column(s)` : "No columns found"}
+        />
+        {detail.columns.length > 0 ? (
+          <ColumnTable columns={detail.columns} />
+        ) : (
+          <EmptySection message="No columns found" />
+        )}
+      </section>
+
+      <section>
+        <SectionHeader title="Primary Key" />
+        <PrimaryKeySection primaryKey={detail.primaryKey} />
+      </section>
+
+      <section>
+        <SectionHeader title="Foreign Keys" subtitle="Outgoing references" />
+        <ForeignKeysSection foreignKeys={detail.foreignKeys} />
+      </section>
+
+      <section>
+        <SectionHeader title="Used By" subtitle="Incoming references" />
+        <IncomingReferencesSection references={detail.referencedBy} />
+      </section>
     </div>
   );
 }
@@ -209,6 +234,105 @@ function ColumnTable({ columns }: { columns: ColumnInfo[] }) {
   );
 }
 
+function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-secondary)" }}>
+        {title}
+      </div>
+      {subtitle && (
+        <div style={{ marginTop: 2, fontSize: 11, color: "var(--text-muted)" }}>
+          {subtitle}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PrimaryKeySection({ primaryKey }: { primaryKey: PrimaryKeyDetail | null }) {
+  if (!primaryKey) {
+    return <EmptySection message="No primary key defined" />;
+  }
+
+  return (
+    <div style={sectionCardStyle}>
+      <MetadataLine label="Constraint" value={primaryKey.constraintName} />
+      <MetadataLine
+        label="Columns"
+        value={primaryKey.columns.map((column) => `${column.position}. ${column.name}`).join(", ")}
+      />
+    </div>
+  );
+}
+
+function ForeignKeysSection({ foreignKeys }: { foreignKeys: ForeignKeyDetail[] }) {
+  if (foreignKeys.length === 0) {
+    return <EmptySection message="No foreign keys defined" />;
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {foreignKeys.map((foreignKey) => (
+        <div key={foreignKey.constraintName} style={sectionCardStyle}>
+          <MetadataLine label="Constraint" value={foreignKey.constraintName} />
+          <MetadataLine label="References" value={`${foreignKey.referencedSchema}.${foreignKey.referencedTable}`} />
+          <MetadataLine
+            label="Columns"
+            value={foreignKey.columns.map((column) => `${column.position}. ${column.localColumn} -> ${column.referencedColumn}`).join(", ")}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function IncomingReferencesSection({ references }: { references: IncomingReferenceDetail[] }) {
+  if (references.length === 0) {
+    return <EmptySection message="This table is not referenced by other tables" />;
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {references.map((reference) => (
+        <div key={`${reference.sourceSchema}.${reference.sourceTable}.${reference.constraintName}`} style={sectionCardStyle}>
+          <MetadataLine label="Child Table" value={`${reference.sourceSchema}.${reference.sourceTable}`} />
+          <MetadataLine label="Constraint" value={reference.constraintName} />
+          <MetadataLine
+            label="Columns"
+            value={reference.columns.map((column) => `${column.position}. ${column.localColumn} -> ${column.referencedColumn}`).join(", ")}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MetadataLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "110px minmax(0, 1fr)", gap: 10, alignItems: "start" }}>
+      <span style={{ color: "var(--text-muted)", fontSize: 11 }}>{label}</span>
+      <span style={{ color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.5, wordBreak: "break-word" }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function EmptySection({ message }: { message: string }) {
+  return (
+    <div style={{
+      padding: "10px 12px",
+      border: "1px solid var(--border-subtle)",
+      background: "var(--panel-bg)",
+      color: "var(--text-muted)",
+      fontSize: 12,
+      fontStyle: "italic",
+    }}>
+      {message}
+    </div>
+  );
+}
+
 // ─── Source code view ───────────────────────────────────────────────
 
 function SourceView({ source }: { source: string }) {
@@ -264,4 +388,13 @@ const thStyle: React.CSSProperties = {
 const tdStyle: React.CSSProperties = {
   padding: "5px 10px", borderBottom: "1px solid var(--border-subtle)",
   whiteSpace: "nowrap",
+};
+
+const sectionCardStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 6,
+  padding: "10px 12px",
+  border: "1px solid var(--border-subtle)",
+  background: "var(--panel-bg)",
 };

@@ -17,3 +17,5 @@ export type { SqlScopeBlock } from "./sql-scope.js";
 export { findNearestSqlScope, findSqlScopeAtCursor, getSqlScopePath, parseSqlScopeBlocks } from "./sql-scope.js";
 export type { BindOccurrence, ExtractedBind } from "./sql-binds.js";
 export { extractBindParameters } from "./sql-binds.js";
+export type { SqlIdentifierPart, SqlObjectReference } from "./sql-object-reference.js";
+export { extractObjectReferenceAtCursor, isInsideSqlStringOrComment } from "./sql-object-reference.js";

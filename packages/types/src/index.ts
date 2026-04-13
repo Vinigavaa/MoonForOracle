@@ -1,5 +1,20 @@
 export type { ConnectionConfig, ConnectionStatus, TransactionState, TnsAliasEntry, TnsFileRequest, SavedConnection, SaveConnectionRequest, SavedConnectionWithPassword } from "./connection";
-export type { DatabaseObjectType, DatabaseObjectSummary, ColumnInfo, TableDetail, ViewDetail, SourceDetail, ObjectDetailResponse } from "./database";
+export type {
+  DatabaseObjectType,
+  OracleObjectKind,
+  DatabaseObjectSummary,
+  DatabaseObjectSuggestion,
+  ColumnInfo,
+  ConstraintColumnInfo,
+  ForeignKeyColumnMapping,
+  PrimaryKeyDetail,
+  ForeignKeyDetail,
+  IncomingReferenceDetail,
+  TableDetail,
+  ViewDetail,
+  SourceDetail,
+  ObjectDetailResponse,
+} from "./database";
 export type {
   QueryResultColumn,
   QueryResultRow,

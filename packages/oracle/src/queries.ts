@@ -1,4 +1,4 @@
-import type { DatabaseObjectType } from "@gavadb/types";
+import type { DatabaseObjectType, OracleObjectKind } from "@gavadb/types";
 
 /**
  * SQL para listar objetos do schema atual, filtrado por tipo.
@@ -99,3 +99,32 @@ const DB_OBJECT_TYPE_MAP: Record<DatabaseObjectType, string> = {
   procedures: "PROCEDURE",
   functions: "FUNCTION",
 };
+
+export const SEARCHABLE_OBJECT_KINDS: readonly OracleObjectKind[] = [
+  "TABLE",
+  "VIEW",
+  "PACKAGE",
+  "PROCEDURE",
+  "FUNCTION",
+  "TRIGGER",
+];
+
+export function oracleObjectKindToDatabaseType(kind: OracleObjectKind): DatabaseObjectType {
+  switch (kind) {
+    case "TABLE":
+      return "tables";
+    case "VIEW":
+      return "views";
+    case "TRIGGER":
+      return "triggers";
+    case "PACKAGE":
+      return "packages";
+    case "PROCEDURE":
+      return "procedures";
+    case "FUNCTION":
+      return "functions";
+  }
+
+  const unsupportedKind: never = kind;
+  throw new Error(`Unsupported Oracle object kind: ${unsupportedKind}`);
+}

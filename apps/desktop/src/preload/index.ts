@@ -57,6 +57,9 @@ contextBridge.exposeInMainWorld("gavadb", {
   dbGetSource: (type: DatabaseObjectType, name: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.DB_GET_SOURCE, type, name),
 
+  dbSearchObjects: (prefix: string, limit?: number) =>
+    ipcRenderer.invoke(IPC_CHANNELS.DB_SEARCH_OBJECTS, prefix, limit),
+
   connListSaved: () =>
     ipcRenderer.invoke(IPC_CHANNELS.CONN_LIST_SAVED),
 

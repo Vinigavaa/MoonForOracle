@@ -13,7 +13,7 @@
   },
   "scripts": {
     "build": "tsc --build",
-    "test": "tsc --build && node dist/sql-statements.test.js && node dist/sql-binds.test.js && node dist/sql-scope.test.js",
+    "test": "tsc --build && node dist/sql-statements.test.js && node dist/sql-binds.test.js && node dist/sql-scope.test.js && node dist/sql-object-reference.test.js",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
