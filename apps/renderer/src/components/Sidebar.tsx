@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import type { DatabaseObjectType, DatabaseObjectSummary, SavedConnection } from "@gavadb/types";
 import { useObjectList, type SectionState } from "../hooks/useObjectList";
+import { loadSidebarPreferences, saveSidebarPreferences } from "../lib/sidebarPreferences";
 
 interface SidebarProps {
   collapsed: boolean;
@@ -31,8 +32,6 @@ const SECTIONS: SectionDef[] = [
   { type: "functions", label: "Functions", icon: "\u0192" },
 ];
 
-const EMPTY_SECTION: SectionState = { objects: [], loading: false, error: null, loaded: false };
-
 export function Sidebar({
   collapsed,
   isConnected,
@@ -48,8 +47,18 @@ export function Sidebar({
 }: SidebarProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState("");
-  const [connSectionExpanded, setConnSectionExpanded] = useState(true);
+  const [connSectionExpanded, setConnSectionExpanded] = useState(() => loadSidebarPreferences().connectionsExpanded);
+  const [dbObjectsExpanded, setDbObjectsExpanded] = useState(() => loadSidebarPreferences().databaseObjectsExpanded);
   const { getSection, loadSection } = useObjectList(isConnected);
+
+  useEffect(() => {
+    const preferences = loadSidebarPreferences();
+    saveSidebarPreferences({
+      ...preferences,
+      connectionsExpanded: connSectionExpanded,
+      databaseObjectsExpanded: dbObjectsExpanded,
+    });
+  }, [connSectionExpanded, dbObjectsExpanded]);
 
   // Reset ao desconectar
   useEffect(() => {
@@ -129,51 +138,51 @@ export function Sidebar({
       />
 
       {/* ��─ Database Objects section ── */}
-      <div style={{
-        padding: "8px 12px",
-        fontSize: 11,
-        fontWeight: 600,
-        textTransform: "uppercase",
-        letterSpacing: "0.05em",
-        color: "var(--text-muted)",
-        borderBottom: "1px solid var(--border-subtle)",
-      }}>
-        Database Objects
-      </div>
+      <div style={{ borderBottom: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+        <CollapsibleSectionHeader
+          label="Database Objects"
+          expanded={dbObjectsExpanded}
+          onToggle={() => setDbObjectsExpanded((current) => !current)}
+        />
 
-      {isConnected && (
-        <div style={{ padding: "6px 8px", borderBottom: "1px solid var(--border-subtle)" }}>
-          <input
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter objects..."
-            style={{
-              width: "100%",
-              padding: "4px 8px",
-              fontSize: 11,
-              background: "var(--panel-bg)",
-              color: "var(--text-primary)",
-              border: "1px solid var(--border-color)",
-              borderRadius: "var(--radius)",
-            }}
-          />
-        </div>
-      )}
+        {dbObjectsExpanded && (
+          <>
+            {isConnected && (
+              <div style={{ padding: "6px 8px", borderBottom: "1px solid var(--border-subtle)" }}>
+                <input
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                  placeholder="Filter objects..."
+                  style={{
+                    width: "100%",
+                    padding: "4px 8px",
+                    fontSize: 11,
+                    background: "var(--panel-bg)",
+                    color: "var(--text-primary)",
+                    border: "1px solid var(--border-color)",
+                    borderRadius: "var(--radius)",
+                  }}
+                />
+              </div>
+            )}
 
-      <div style={{ flex: 1, overflowY: "auto" }}>
-        {SECTIONS.map((def) => (
-          <SidebarSection
-            key={def.type}
-            def={def}
-            isConnected={isConnected}
-            expanded={!!expanded[def.type]}
-            state={getSection(def.type)}
-            filter={lowerFilter}
-            onToggle={() => toggleSection(def.type)}
-            onReload={() => loadSection(def.type)}
-            onObjectSelect={onObjectSelect}
-          />
-        ))}
+            <div style={{ flex: 1, overflowY: "auto" }}>
+              {SECTIONS.map((def) => (
+                <SidebarSection
+                  key={def.type}
+                  def={def}
+                  isConnected={isConnected}
+                  expanded={!!expanded[def.type]}
+                  state={getSection(def.type)}
+                  filter={lowerFilter}
+                  onToggle={() => toggleSection(def.type)}
+                  onReload={() => loadSection(def.type)}
+                  onObjectSelect={onObjectSelect}
+                />
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -225,40 +234,12 @@ function SavedConnectionsSection({
 
   return (
     <div style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-      {/* Section header */}
-      <button
-        onClick={onToggle}
-        style={{
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          padding: "8px 12px",
-          background: "transparent",
-          border: "none",
-          borderRadius: 0,
-          color: "var(--text-muted)",
-          fontSize: 11,
-          fontWeight: 600,
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-          textAlign: "left",
-          cursor: "pointer",
-        }}
-      >
-        <span style={{
-          fontSize: 10,
-          transition: "transform 0.15s",
-          transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
-          display: "inline-block",
-        }}>
-          {"\u25B6"}
-        </span>
-        <span>Connections</span>
-        <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-muted)" }}>
-          {connections.length || ""}
-        </span>
-      </button>
+      <CollapsibleSectionHeader
+        label="Connections"
+        expanded={expanded}
+        count={connections.length || undefined}
+        onToggle={onToggle}
+      />
 
       {/* Expanded list */}
       {expanded && (
@@ -404,6 +385,33 @@ function SavedConnectionsSection({
   );
 }
 
+function CollapsibleSectionHeader({
+  label,
+  expanded,
+  onToggle,
+  count,
+}: {
+  label: string;
+  expanded: boolean;
+  onToggle: () => void;
+  count?: number;
+}) {
+  return (
+    <button onClick={onToggle} style={collapsibleSectionHeaderStyle}>
+      <span
+        style={{
+          ...collapsibleSectionChevronStyle,
+          transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
+        }}
+      >
+        {"\u25B6"}
+      </span>
+      <span>{label}</span>
+      <span style={collapsibleSectionCountStyle}>{count ?? ""}</span>
+    </button>
+  );
+}
+
 const sidebarSmallBtnStyle: React.CSSProperties = {
   fontSize: 10,
   padding: "1px 6px",
@@ -457,6 +465,36 @@ const popoverBtnStyle: React.CSSProperties = {
 };
 
 // ── Section component ──
+
+const collapsibleSectionHeaderStyle: React.CSSProperties = {
+  width: "100%",
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "8px 12px",
+  background: "transparent",
+  border: "none",
+  borderRadius: 0,
+  color: "var(--text-muted)",
+  fontSize: 11,
+  fontWeight: 600,
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+  textAlign: "left",
+  cursor: "pointer",
+};
+
+const collapsibleSectionChevronStyle: React.CSSProperties = {
+  fontSize: 10,
+  transition: "transform 0.15s",
+  display: "inline-block",
+};
+
+const collapsibleSectionCountStyle: React.CSSProperties = {
+  marginLeft: "auto",
+  fontSize: 11,
+  color: "var(--text-muted)",
+};
 
 const sidebarHeaderRowStyle: React.CSSProperties = {
   display: "flex",

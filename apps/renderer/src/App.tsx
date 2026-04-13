@@ -55,7 +55,8 @@ export function App() {
   const executeAllTriggerRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    saveSidebarPreferences({ collapsed: sidebarCollapsed });
+    const preferences = loadSidebarPreferences();
+    saveSidebarPreferences({ ...preferences, collapsed: sidebarCollapsed });
   }, [sidebarCollapsed]);
 
   // Listen for backend errors via IPC and surface as toasts

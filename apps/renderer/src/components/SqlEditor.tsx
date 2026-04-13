@@ -90,6 +90,7 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
   });
   const [activeTabId, setActiveTabId] = useState(() => editorTabs[0].id);
   const [splitRatio, setSplitRatio] = useState(0.4);
+  const [isResizing, setIsResizing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
   const { execute: executeSql, updateRows, countRows, inferBinds } = useSqlExecution();
@@ -603,11 +604,27 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
     });
   }, [activeTabId]);
 
-  const onMouseDown = useCallback(() => { dragging.current = true; }, []);
+  const onMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    dragging.current = true;
+    setIsResizing(true);
+    window.getSelection()?.removeAllRanges();
+  }, []);
+
+  useEffect(() => {
+    if (!isResizing) return;
+    document.body.classList.add("is-resizing");
+    return () => {
+      document.body.classList.remove("is-resizing");
+    };
+  }, [isResizing]);
 
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
       if (!dragging.current || !containerRef.current) return;
+      e.preventDefault();
+      window.getSelection()?.removeAllRanges();
       const rect = containerRef.current.getBoundingClientRect();
       const totalHeight = rect.height;
       const editorHeight = e.clientY - rect.top;
@@ -617,7 +634,11 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
       );
       setSplitRatio(ratio);
     };
-    const onMouseUp = () => { dragging.current = false; };
+    const onMouseUp = () => {
+      if (!dragging.current) return;
+      dragging.current = false;
+      setIsResizing(false);
+    };
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
     return () => {
@@ -752,6 +773,7 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
           background: "var(--border-color)",
           flexShrink: 0,
           position: "relative",
+          userSelect: "none",
         }}
       >
         <div style={{

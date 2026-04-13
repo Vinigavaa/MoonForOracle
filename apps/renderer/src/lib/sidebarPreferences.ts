@@ -2,18 +2,32 @@ const STORAGE_KEY = "gavadb.sidebar-preferences.v1";
 
 interface SidebarPreferences {
   collapsed: boolean;
+  connectionsExpanded: boolean;
+  databaseObjectsExpanded: boolean;
 }
 
 export function loadSidebarPreferences(): SidebarPreferences {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { collapsed: false };
+    if (!raw) {
+      return {
+        collapsed: false,
+        connectionsExpanded: true,
+        databaseObjectsExpanded: true,
+      };
+    }
     const parsed = JSON.parse(raw) as Partial<SidebarPreferences>;
     return {
       collapsed: parsed.collapsed === true,
+      connectionsExpanded: parsed.connectionsExpanded !== false,
+      databaseObjectsExpanded: parsed.databaseObjectsExpanded !== false,
     };
   } catch {
-    return { collapsed: false };
+    return {
+      collapsed: false,
+      connectionsExpanded: true,
+      databaseObjectsExpanded: true,
+    };
   }
 }
 

@@ -236,3 +236,9 @@ input::placeholder,
 textarea::placeholder {
   color: var(--text-placeholder);
 }
+
+body.is-resizing,
+body.is-resizing * {
+  user-select: none !important;
+  cursor: row-resize !important;
+}
