@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SqlExecutionResponse, QueryResultRow, UpdateRowRequest, BindMetadata, BindParameterValue } from "@gavadb/types";
 import type { DatabaseObjectType } from "@gavadb/types";
 import { generateId, extractBindParameters } from "@gavadb/utils";
@@ -19,7 +19,6 @@ const MAX_ACCUMULATED_ROWS = 5_000;
 // ─── Editor state (lightweight, changes on every keystroke) ──────────
 interface TabEditorState {
   id: string;
-  title: string;
   sql: string;
   currentExecutionSnapshot: SqlEditorExecutionSnapshot | null;
 }
@@ -48,9 +47,9 @@ interface TabResultState {
 /** Combined view for external consumers / backward compat */
 export interface SqlTab extends TabEditorState, TabResultState {}
 
-function createEditorState(index: number): TabEditorState {
+function createEditorState(): TabEditorState {
   const id = generateId();
-  return { id, title: `Query ${index}`, sql: "", currentExecutionSnapshot: null };
+  return { id, sql: "", currentExecutionSnapshot: null };
 }
 
 function createResultState(): TabResultState {
@@ -82,7 +81,7 @@ const MIN_RESULT_HEIGHT = 60;
 export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef, onOpenObject }: SqlEditorProps) {
   // ─── Separate editor state from result state ─────────────────────
   const [editorTabs, setEditorTabs] = useState<TabEditorState[]>(() => {
-    const first = createEditorState(1);
+    const first = createEditorState();
     return [first];
   });
   const [resultTabs, setResultTabs] = useState<Record<string, TabResultState>>(() => {
@@ -90,7 +89,6 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
     return { [firstId]: createResultState() };
   });
   const [activeTabId, setActiveTabId] = useState(() => editorTabs[0].id);
-  const [tabCounter, setTabCounter] = useState(2);
   const [splitRatio, setSplitRatio] = useState(0.4);
   const containerRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
@@ -110,6 +108,10 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
 
   const activeEditorTab = editorTabs.find((t) => t.id === activeTabId) ?? editorTabs[0];
   const activeResultTab = resultTabs[activeTabId] ?? createResultState();
+  const displayTabs = useMemo(
+    () => editorTabs.map((tab, index) => ({ ...tab, title: `Query ${index + 1}` })),
+    [editorTabs],
+  );
 
   // ─── Targeted updaters (only touch the state slice that changed) ──
   const updateEditorTab = useCallback((id: string, patch: Partial<TabEditorState>) => {
@@ -576,12 +578,11 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
   }, [isConnected, onOpenObject, resolveObject, toast]);
 
   const addTab = useCallback(() => {
-    const t = createEditorState(tabCounter);
-    setTabCounter((c) => c + 1);
+    const t = createEditorState();
     setEditorTabs((prev) => [...prev, t]);
     setResultTabs((prev) => ({ ...prev, [t.id]: createResultState() }));
     setActiveTabId(t.id);
-  }, [tabCounter]);
+  }, []);
 
   const closeTab = useCallback((id: string) => {
     setEditorTabs((prev) => {
@@ -637,7 +638,7 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
         height: 30,
         overflow: "hidden",
       }}>
-        {editorTabs.map((tab) => {
+        {displayTabs.map((tab) => {
           const isActive = tab.id === activeTabId;
           const rt = resultTabs[tab.id];
           return (
@@ -661,7 +662,7 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
             >
               {tab.title}
               {(rt?.executing || rt?.loadingMore) && <span style={{ color: "var(--warning)" }}>...</span>}
-              {editorTabs.length > 1 && (
+              {displayTabs.length > 1 && (
                 <span
                   onClick={(e) => { e.stopPropagation(); closeTab(tab.id); }}
                   style={{ marginLeft: 2, fontSize: 13, color: "var(--text-muted)", cursor: "pointer", lineHeight: 1 }}
@@ -826,4 +827,3 @@ function normalizeSortError(column: string, message?: string): string {
   }
   return `${fallback} ${message}`;
 }
-

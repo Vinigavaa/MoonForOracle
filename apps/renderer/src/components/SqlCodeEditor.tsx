@@ -11,6 +11,7 @@ import type { SqlEditorExecutionSnapshot } from "../lib/sqlExecutionTarget";
 import { buildExecutionSnapshot } from "../lib/sqlExecutionTarget";
 import type { EditorThemeConfig } from "../lib/editorTheme";
 import { useEditorTheme } from "../hooks/EditorThemeContext";
+import { sqlScopeExtension } from "../lib/sqlScopeExtension";
 
 interface SqlCodeEditorProps {
   value: string;
@@ -51,6 +52,47 @@ function buildCmTheme(cfg: EditorThemeConfig) {
       fontFamily: cfg.fontFamily,
     },
     ".cm-line": { padding: 0 },
+    ".cm-sql-scope-gutter": {
+      minWidth: "28px",
+      borderRight: "1px solid transparent",
+    },
+    ".cm-sql-scope-gutter .cm-gutterElement": {
+      padding: 0,
+      width: "100%",
+    },
+    ".cm-sql-scope-gutter-marker": {
+      position: "relative",
+      height: "100%",
+      minHeight: "1.6em",
+      pointerEvents: "none",
+    },
+    ".cm-sql-scope-gutter-line": {
+      position: "absolute",
+      width: "1px",
+      background: cfg.scopeLineColor,
+      opacity: String(Math.max(0.1, Math.min(cfg.scopeLineOpacity, 0.6))),
+      borderRadius: "999px",
+      transform: "translateX(-0.5px)",
+    },
+    ".cm-sql-scope-gutter-line.is-active": {
+      background: cfg.scopeLineColor,
+      opacity: String(Math.max(0.22, Math.min(cfg.scopeLineOpacity + 0.18, 0.82))),
+      width: "2px",
+      transform: "translateX(-1px)",
+    },
+    ".cm-sql-scope-gutter-elbow": {
+      position: "absolute",
+      height: "1px",
+      background: cfg.scopeLineColor,
+      opacity: String(Math.max(0.1, Math.min(cfg.scopeLineOpacity, 0.6))),
+      transform: "translateY(-0.5px)",
+      borderRadius: "999px",
+    },
+    ".cm-sql-scope-gutter-elbow.is-active": {
+      opacity: String(Math.max(0.22, Math.min(cfg.scopeLineOpacity + 0.18, 0.82))),
+      height: "2px",
+      transform: "translateY(-1px)",
+    },
     ".cm-cursor": { borderLeftColor: cfg.cursor },
     ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
       background: `${cfg.selection} !important`,
@@ -244,6 +286,7 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
   const placeholderCompartmentRef = useRef(new Compartment());
   const themeCompartmentRef = useRef(new Compartment());
   const highlightCompartmentRef = useRef(new Compartment());
+  const scopeCompartmentRef = useRef(new Compartment());
   const hoveredElementRef = useRef<HTMLElement | null>(null);
   const hoveredWordRef = useRef<string | null>(null);
   const lastMouseEventRef = useRef<MouseEvent | null>(null);
@@ -401,6 +444,7 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
       highlightActiveLine(),
       highlightActiveLineGutter(),
       search({ top: true }),
+      scopeCompartmentRef.current.of(sqlScopeExtension({ color: themeConfig.scopeLineColor, opacity: themeConfig.scopeLineOpacity })),
       themeCompartmentRef.current.of(buildCmTheme(themeConfig)),
       highlightCompartmentRef.current.of(buildHighlightStyle(themeConfig)),
       EditorView.updateListener.of((update) => {
@@ -481,6 +525,7 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
       effects: [
         themeCompartmentRef.current.reconfigure(buildCmTheme(themeConfig)),
         highlightCompartmentRef.current.reconfigure(buildHighlightStyle(themeConfig)),
+        scopeCompartmentRef.current.reconfigure(sqlScopeExtension({ color: themeConfig.scopeLineColor, opacity: themeConfig.scopeLineOpacity })),
       ],
     });
   }, [themeConfig]);

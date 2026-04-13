@@ -10,6 +10,7 @@ import { ConnectionDialog } from "./components/ConnectionDialog";
 import { useConnection } from "./hooks/useConnection";
 import { useSavedConnections } from "./hooks/useSavedConnections";
 import { useToastContext } from "./hooks/ToastContext";
+import { loadSidebarPreferences, saveSidebarPreferences } from "./lib/sidebarPreferences";
 
 const SQL_TAB_ID = "sql-editor";
 const PREFS_TAB_ID = "preferences";
@@ -49,8 +50,13 @@ export function App() {
   const [editingPassword, setEditingPassword] = useState<string>("");
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [objectTabs, setObjectTabs] = useState<ObjectTab[]>([]);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => loadSidebarPreferences().collapsed);
   const executeTriggerRef = useRef<(() => void) | null>(null);
   const executeAllTriggerRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    saveSidebarPreferences({ collapsed: sidebarCollapsed });
+  }, [sidebarCollapsed]);
 
   // Listen for backend errors via IPC and surface as toasts
   useEffect(() => {
@@ -274,6 +280,7 @@ export function App() {
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         <Sidebar
+          collapsed={sidebarCollapsed}
           isConnected={isConnected}
           onObjectSelect={handleObjectSelect}
           savedConnections={savedConns.connections}
@@ -283,6 +290,7 @@ export function App() {
           onEditConnection={handleEditSavedConnection}
           onDeleteConnection={handleDeleteSavedConnection}
           onToggleFavorite={savedConns.toggleFavorite}
+          onToggleCollapse={() => setSidebarCollapsed((current) => !current)}
         />
 
         <TabPanel

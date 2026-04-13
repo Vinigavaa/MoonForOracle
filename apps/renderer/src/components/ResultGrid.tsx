@@ -84,6 +84,7 @@ export const ResultGrid = memo(function ResultGrid({
   onSort,
   onCountRows,
 }: ResultGridProps) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
   const [scrollTop, setScrollTop] = useState(0);
@@ -259,9 +260,14 @@ export const ResultGrid = memo(function ResultGrid({
 
   // ─── Keyboard navigation ─────────────────────────────────────────
 
-  const scrollCellIntoView = useCallback((rowIndex: number) => {
+  const focusGrid = useCallback(() => {
+    rootRef.current?.focus();
+  }, []);
+
+  const scrollCellIntoView = useCallback((rowIndex: number, colIndex: number) => {
     const el = scrollRef.current;
     if (!el) return;
+
     const rowTop = rowIndex * ROW_HEIGHT;
     const rowBottom = rowTop + ROW_HEIGHT;
     const viewTop = el.scrollTop + headerHeight;
@@ -271,19 +277,35 @@ export const ResultGrid = memo(function ResultGrid({
     } else if (rowBottom > viewBottom) {
       el.scrollTop = rowBottom - el.clientHeight;
     }
+
+    window.requestAnimationFrame(() => {
+      const activeCell = tableRef.current?.querySelector<HTMLElement>(`[data-cell-key="${rowIndex}:${colIndex}"]`);
+      activeCell?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    });
   }, [headerHeight]);
+
+  useEffect(() => {
+    if (!selectedCell) return;
+    scrollCellIntoView(selectedCell.rowIndex, selectedCell.colIndex);
+  }, [selectedCell, scrollCellIntoView]);
+
+  const moveSelection = useCallback((nextRowIndex: number, nextColIndex: number) => {
+    const boundedRowIndex = Math.max(0, Math.min(nextRowIndex, totalRows - 1));
+    const boundedColIndex = Math.max(0, Math.min(nextColIndex, columns.length - 1));
+    setSelectedCell({ rowIndex: boundedRowIndex, colIndex: boundedColIndex });
+  }, [columns.length, totalRows]);
 
   const handleGridKeyDown = useCallback((e: React.KeyboardEvent) => {
     // If we're in editing mode, let the input handle keys
     if (editingCell) return;
+    if (totalRows === 0 || columns.length === 0) return;
 
     const sel = selectedCell;
     if (!sel) {
       // If no cell selected, select first cell on any arrow key
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
         e.preventDefault();
-        setSelectedCell({ rowIndex: 0, colIndex: 0 });
-        scrollCellIntoView(0);
+        moveSelection(0, 0);
       }
       return;
     }
@@ -294,40 +316,35 @@ export const ResultGrid = memo(function ResultGrid({
       case "ArrowUp":
         e.preventDefault();
         if (rowIndex > 0) {
-          setSelectedCell({ rowIndex: rowIndex - 1, colIndex });
-          scrollCellIntoView(rowIndex - 1);
+          moveSelection(rowIndex - 1, colIndex);
         }
         break;
       case "ArrowDown":
         e.preventDefault();
         if (rowIndex < totalRows - 1) {
-          setSelectedCell({ rowIndex: rowIndex + 1, colIndex });
-          scrollCellIntoView(rowIndex + 1);
+          moveSelection(rowIndex + 1, colIndex);
         }
         break;
       case "ArrowLeft":
         e.preventDefault();
         if (colIndex > 0) {
-          setSelectedCell({ rowIndex, colIndex: colIndex - 1 });
+          moveSelection(rowIndex, colIndex - 1);
         }
         break;
       case "ArrowRight":
         e.preventDefault();
         if (colIndex < columns.length - 1) {
-          setSelectedCell({ rowIndex, colIndex: colIndex + 1 });
+          moveSelection(rowIndex, colIndex + 1);
         }
         break;
       case "Tab":
         e.preventDefault();
         if (e.shiftKey) {
-          if (colIndex > 0) setSelectedCell({ rowIndex, colIndex: colIndex - 1 });
-          else if (rowIndex > 0) setSelectedCell({ rowIndex: rowIndex - 1, colIndex: columns.length - 1 });
+          if (colIndex > 0) moveSelection(rowIndex, colIndex - 1);
+          else if (rowIndex > 0) moveSelection(rowIndex - 1, columns.length - 1);
         } else {
-          if (colIndex < columns.length - 1) setSelectedCell({ rowIndex, colIndex: colIndex + 1 });
-          else if (rowIndex < totalRows - 1) {
-            setSelectedCell({ rowIndex: rowIndex + 1, colIndex: 0 });
-            scrollCellIntoView(rowIndex + 1);
-          }
+          if (colIndex < columns.length - 1) moveSelection(rowIndex, colIndex + 1);
+          else if (rowIndex < totalRows - 1) moveSelection(rowIndex + 1, 0);
         }
         break;
       case "Enter":
@@ -354,9 +371,10 @@ export const ResultGrid = memo(function ResultGrid({
         }
         break;
     }
-  }, [editingCell, selectedCell, totalRows, columns, canEditRows, beginEdit, scrollCellIntoView, rows, pendingChanges]);
+  }, [editingCell, selectedCell, totalRows, columns, canEditRows, beginEdit, rows, pendingChanges, moveSelection]);
 
   const handleCellClick = useCallback((rowIndex: number, colIndex: number) => {
+    focusGrid();
     // Single click = select only
     if (editingCell) {
       // If clicking a different cell while editing, commit current edit first
@@ -365,14 +383,15 @@ export const ResultGrid = memo(function ResultGrid({
       }
     }
     setSelectedCell({ rowIndex, colIndex });
-  }, [editingCell, commitEdit]);
+  }, [editingCell, commitEdit, focusGrid]);
 
   const handleCellDoubleClick = useCallback((rowIndex: number, colIndex: number) => {
+    focusGrid();
     if (canEditRows) {
       setSelectedCell({ rowIndex, colIndex });
       beginEdit(rowIndex, colIndex);
     }
-  }, [canEditRows, beginEdit]);
+  }, [canEditRows, beginEdit, focusGrid]);
 
   if (result.columns.length === 0) {
     return <div style={emptyStateStyle}>No columns returned</div>;
@@ -380,6 +399,7 @@ export const ResultGrid = memo(function ResultGrid({
 
   return (
     <div
+      ref={rootRef}
       style={{ display: "flex", flexDirection: "column", height: "100%", background: "var(--result-viewer-bg)" }}
       onKeyDown={handleGridKeyDown}
       tabIndex={0}
@@ -457,6 +477,7 @@ export const ResultGrid = memo(function ResultGrid({
                     return (
                       <td
                         key={col.name}
+                        data-cell-key={`${rowIdx}:${colIdx}`}
                         onClick={() => handleCellClick(rowIdx, colIdx)}
                         onDoubleClick={() => handleCellDoubleClick(rowIdx, colIdx)}
                         style={{
@@ -473,11 +494,21 @@ export const ResultGrid = memo(function ResultGrid({
                             onChange={(e) => setEditValue(e.target.value)}
                             onBlur={commitEdit}
                             onKeyDown={(e) => {
-                              if (e.key === "Enter") { e.preventDefault(); commitEdit(); }
-                              if (e.key === "Escape") { e.preventDefault(); cancelEditing(); setSelectedCell({ rowIndex: rowIdx, colIndex: colIdx }); }
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                commitEdit();
+                                focusGrid();
+                              }
+                              if (e.key === "Escape") {
+                                e.preventDefault();
+                                cancelEditing();
+                                setSelectedCell({ rowIndex: rowIdx, colIndex: colIdx });
+                                focusGrid();
+                              }
                               if (e.key === "Tab") {
                                 e.preventDefault();
                                 commitEdit();
+                                focusGrid();
                                 // Move selection after commit
                                 if (e.shiftKey) {
                                   if (colIdx > 0) setSelectedCell({ rowIndex: rowIdx, colIndex: colIdx - 1 });

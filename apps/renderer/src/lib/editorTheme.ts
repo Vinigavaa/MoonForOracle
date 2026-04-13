@@ -62,6 +62,8 @@ export interface EditorThemeConfig {
   activeLine: string;
   selection: string;
   cursor: string;
+  scopeLineColor: string;
+  scopeLineOpacity: number;
   fontSize: number;
   fontFamily: string;
   baseTheme: "dark" | "light";
@@ -128,6 +130,8 @@ export const DEFAULT_THEME: EditorThemeConfig = {
   activeLine: "rgba(255, 255, 255, 0.04)",
   selection: "rgba(137, 180, 250, 0.18)",
   cursor: "#89b4fa",
+  scopeLineColor: "#6c7086",
+  scopeLineOpacity: 0.34,
   fontSize: 13,
   fontFamily: '"Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace',
   baseTheme: "dark",
@@ -192,6 +196,8 @@ export const THEME_CSS_VARS: Record<keyof EditorThemeConfig, string | null> = {
   activeLine: "--editor-active-line",
   selection: "--text-selection-bg",
   cursor: "--editor-cursor",
+  scopeLineColor: "--editor-scope-line-color",
+  scopeLineOpacity: "--editor-scope-line-opacity",
   fontSize: null,
   fontFamily: null,
   baseTheme: null,
@@ -220,8 +226,8 @@ export function resetTheme(): EditorThemeConfig {
 export function applyThemeToDocument(config: EditorThemeConfig, root: HTMLElement = document.documentElement): void {
   for (const key of Object.keys(THEME_CSS_VARS) as Array<keyof EditorThemeConfig>) {
     const cssVar = THEME_CSS_VARS[key];
-    if (cssVar && typeof config[key] === "string") {
-      root.style.setProperty(cssVar, config[key] as string);
+    if (cssVar && (typeof config[key] === "string" || typeof config[key] === "number")) {
+      root.style.setProperty(cssVar, String(config[key]));
     }
   }
 

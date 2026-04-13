@@ -16,6 +16,10 @@ interface ThemeField {
   key: keyof EditorThemeConfig;
   label: string;
   description?: string;
+  kind?: "color" | "range";
+  min?: number;
+  max?: number;
+  step?: number;
 }
 
 interface ThemeGroup {
@@ -25,106 +29,108 @@ interface ThemeGroup {
 
 const GROUPS: ThemeGroup[] = [
   {
-    title: "General App Colors",
+    title: "Cores Gerais do App",
     fields: [
-      { key: "appBg", label: "App background" },
-      { key: "panelBg", label: "Panel background" },
-      { key: "surfaceBg", label: "Raised surface" },
-      { key: "hoverBg", label: "Hover background" },
-      { key: "selectedBg", label: "Selected item" },
-      { key: "activeBg", label: "Active item" },
-      { key: "focusColor", label: "Focus / accent" },
+      { key: "appBg", label: "Fundo do app" },
+      { key: "panelBg", label: "Fundo dos painéis" },
+      { key: "surfaceBg", label: "Superfície elevada" },
+      { key: "hoverBg", label: "Fundo de hover" },
+      { key: "selectedBg", label: "Item selecionado" },
+      { key: "activeBg", label: "Item ativo" },
+      { key: "focusColor", label: "Foco / destaque" },
     ],
   },
   {
-    title: "Text and Borders",
+    title: "Texto e Bordas",
     fields: [
-      { key: "textPrimary", label: "Primary text" },
-      { key: "textSecondary", label: "Secondary text" },
-      { key: "textTitle", label: "Titles" },
+      { key: "textPrimary", label: "Texto principal" },
+      { key: "textSecondary", label: "Texto secundário" },
+      { key: "textTitle", label: "Títulos" },
       { key: "textPlaceholder", label: "Placeholders" },
-      { key: "textMuted", label: "Muted text" },
-      { key: "borderColor", label: "Borders" },
-      { key: "dividerColor", label: "Dividers" },
+      { key: "textMuted", label: "Texto suave" },
+      { key: "borderColor", label: "Bordas" },
+      { key: "dividerColor", label: "Divisórias" },
     ],
   },
   {
     title: "Sidebar",
     fields: [
-      { key: "sidebarBg", label: "Sidebar background" },
+      { key: "sidebarBg", label: "Fundo da sidebar" },
       { key: "popupBg", label: "Popovers" },
     ],
   },
   {
-    title: "Header / Topbar",
+    title: "Cabeçalho / Barra Superior",
     fields: [
-      { key: "topbarBg", label: "Topbar background" },
-      { key: "statusConnected", label: "Connected status" },
-      { key: "statusDisconnected", label: "Disconnected status" },
-      { key: "statusPending", label: "Pending transaction" },
+      { key: "topbarBg", label: "Fundo da barra superior" },
+      { key: "statusConnected", label: "Status conectado" },
+      { key: "statusDisconnected", label: "Status desconectado" },
+      { key: "statusPending", label: "Transação pendente" },
     ],
   },
   {
-    title: "Panels and Tabs",
+    title: "Painéis e Abas",
     fields: [
-      { key: "tabBarBg", label: "Tab bar" },
-      { key: "tabActiveBg", label: "Active tab" },
-      { key: "modalBg", label: "Modals" },
+      { key: "tabBarBg", label: "Barra de abas" },
+      { key: "tabActiveBg", label: "Aba ativa" },
+      { key: "modalBg", label: "Modais" },
     ],
   },
   {
-    title: "SQL Editor",
+    title: "Editor SQL",
     fields: [
-      { key: "bgEditor", label: "Editor background" },
-      { key: "bgGutter", label: "Line counter background" },
-      { key: "textDefault", label: "Editor text" },
-      { key: "activeLine", label: "Current line" },
-      { key: "selection", label: "Text selection" },
+      { key: "bgEditor", label: "Fundo do editor" },
+      { key: "bgGutter", label: "Fundo da numeração" },
+      { key: "textDefault", label: "Texto do editor" },
+      { key: "activeLine", label: "Linha atual" },
+      { key: "selection", label: "Seleção de texto" },
       { key: "cursor", label: "Cursor" },
-      { key: "textKeyword", label: "Reserved words" },
+      { key: "scopeLineColor", label: "Cor da linha de escopo" },
+      { key: "textKeyword", label: "Palavras reservadas" },
       { key: "textString", label: "Strings" },
-      { key: "textNumber", label: "Numbers" },
-      { key: "textComment", label: "Comments" },
-      { key: "textIdentifier", label: "Identifiers" },
-      { key: "textOperator", label: "Operators" },
-      { key: "textPunctuation", label: "Punctuation" },
+      { key: "textNumber", label: "Números" },
+      { key: "textComment", label: "Comentários" },
+      { key: "textIdentifier", label: "Identificadores" },
+      { key: "textOperator", label: "Operadores" },
+      { key: "textPunctuation", label: "Pontuação" },
+      { key: "scopeLineOpacity", label: "Opacidade da linha de escopo", kind: "range", min: 0.1, max: 0.75, step: 0.01 },
     ],
   },
   {
-    title: "Result Viewer / Data Grid",
+    title: "Visualizador de Resultados / Grid",
     fields: [
-      { key: "resultViewerBg", label: "Result viewer" },
-      { key: "gridBg", label: "Grid background" },
-      { key: "gridHeaderBg", label: "Grid header" },
-      { key: "gridAltRowBg", label: "Alternating row" },
-      { key: "cellSelectedBg", label: "Selected cell" },
-      { key: "cellEditingBg", label: "Editing cell" },
-      { key: "cellModifiedBg", label: "Modified cell" },
-      { key: "rowPendingBg", label: "Pending row" },
+      { key: "resultViewerBg", label: "Visualizador de resultados" },
+      { key: "gridBg", label: "Fundo do grid" },
+      { key: "gridHeaderBg", label: "Cabeçalho do grid" },
+      { key: "gridAltRowBg", label: "Linha alternada" },
+      { key: "cellSelectedBg", label: "Célula selecionada" },
+      { key: "cellEditingBg", label: "Célula em edição" },
+      { key: "cellModifiedBg", label: "Célula modificada" },
+      { key: "rowPendingBg", label: "Linha pendente" },
     ],
   },
   {
-    title: "Buttons and States",
+    title: "Botões e Estados",
     fields: [
-      { key: "buttonPrimaryBg", label: "Primary button" },
-      { key: "buttonPrimaryText", label: "Primary button text" },
-      { key: "buttonSecondaryBg", label: "Secondary button" },
-      { key: "buttonSecondaryText", label: "Secondary button text" },
-      { key: "buttonDisabledBg", label: "Disabled button" },
-      { key: "buttonDisabledText", label: "Disabled button text" },
+      { key: "buttonPrimaryBg", label: "Botão primário" },
+      { key: "buttonPrimaryText", label: "Texto do botão primário" },
+      { key: "buttonSecondaryBg", label: "Botão secundário" },
+      { key: "buttonSecondaryText", label: "Texto do botão secundário" },
+      { key: "buttonDisabledBg", label: "Botão desabilitado" },
+      { key: "buttonDisabledText", label: "Texto do botão desabilitado" },
       { key: "info", label: "Info" },
-      { key: "success", label: "Success" },
-      { key: "warning", label: "Warning" },
-      { key: "danger", label: "Error" },
+      { key: "success", label: "Sucesso" },
+      { key: "warning", label: "Aviso" },
+      { key: "danger", label: "Erro" },
     ],
   },
   {
-    title: "Code Viewer and Scroll",
+    title: "Visualizador de Código e Rolagem",
     fields: [
-      { key: "codeViewerBg", label: "Code viewer" },
-      { key: "scrollbarTrack", label: "Scroll track" },
-      { key: "scrollbarThumb", label: "Scroll thumb" },
-      { key: "scrollbarThumbHover", label: "Scroll thumb hover" },
+      { key: "codeViewerBg", label: "Visualizador de código" },
+      { key: "scrollbarTrack", label: "Trilha da barra de rolagem" },
+      { key: "scrollbarThumb", label: "Polegar da barra de rolagem" },
+      { key: "scrollbarThumbHover", label: "Hover da barra de rolagem" },
     ],
   },
 ];
@@ -138,6 +144,10 @@ export function ThemePreferencesPanel() {
     updateTheme({ [key]: value });
   }, [updateTheme]);
 
+  const updateNumber = useCallback((key: keyof EditorThemeConfig, value: number) => {
+    updateTheme({ [key]: value });
+  }, [updateTheme]);
+
   const updateFontSize = useCallback((value: number) => {
     updateTheme({ fontSize: Math.max(9, Math.min(24, value)) });
   }, [updateTheme]);
@@ -147,11 +157,11 @@ export function ThemePreferencesPanel() {
       <div style={settingsPaneStyle}>
         <header style={headerStyle}>
           <div>
-            <div style={titleStyle}>Theme Preferences</div>
-            <div style={subtitleStyle}>Saved automatically and applied immediately.</div>
+            <div style={titleStyle}>Preferências de Tema</div>
+            <div style={subtitleStyle}>Salvo automaticamente e aplicado imediatamente.</div>
           </div>
           <button onClick={resetTheme} disabled={defaultTheme} style={resetButtonStyle}>
-            Reset all
+            Restaurar tudo
           </button>
         </header>
 
@@ -160,9 +170,9 @@ export function ThemePreferencesPanel() {
         )}
 
         <section style={fontSectionStyle}>
-          <div style={sectionTitleStyle}>Editor Font</div>
+          <div style={sectionTitleStyle}>Fonte do Editor</div>
           <div style={fontControlStyle}>
-            <label style={fieldLabelStyle}>Size ({theme.fontSize}px)</label>
+            <label style={fieldLabelStyle}>Tamanho ({theme.fontSize}px)</label>
             <input
               type="range"
               min={9}
@@ -173,7 +183,7 @@ export function ThemePreferencesPanel() {
             />
           </div>
           <div style={fontControlStyle}>
-            <label style={fieldLabelStyle}>Family</label>
+            <label style={fieldLabelStyle}>Família</label>
             <select
               value={theme.fontFamily}
               onChange={(event) => updateTheme({ fontFamily: event.target.value })}
@@ -183,7 +193,7 @@ export function ThemePreferencesPanel() {
               <option value={'"Fira Code", "Cascadia Code", "JetBrains Mono", "Consolas", monospace'}>Fira Code</option>
               <option value={'"JetBrains Mono", "Cascadia Code", "Fira Code", "Consolas", monospace'}>JetBrains Mono</option>
               <option value={'"Consolas", "Cascadia Code", monospace'}>Consolas</option>
-              <option value="monospace">System monospace</option>
+              <option value="monospace">Monospace do sistema</option>
             </select>
           </div>
         </section>
@@ -193,13 +203,23 @@ export function ThemePreferencesPanel() {
             <div style={sectionTitleStyle}>{group.title}</div>
             <div style={fieldsGridStyle}>
               {group.fields.map((field) => (
-                <ColorField
-                  key={field.key}
-                  field={field}
-                  value={String(theme[field.key])}
-                  defaultValue={String(DEFAULT_THEME[field.key])}
-                  onChange={(value) => updateColor(field.key, value)}
-                />
+                field.kind === "range" ? (
+                  <RangeField
+                    key={field.key}
+                    field={field}
+                    value={Number(theme[field.key])}
+                    defaultValue={Number(DEFAULT_THEME[field.key])}
+                    onChange={(value) => updateNumber(field.key, value)}
+                  />
+                ) : (
+                  <ColorField
+                    key={field.key}
+                    field={field}
+                    value={String(theme[field.key])}
+                    defaultValue={String(DEFAULT_THEME[field.key])}
+                    onChange={(value) => updateColor(field.key, value)}
+                  />
+                )
               ))}
             </div>
           </section>
@@ -208,12 +228,56 @@ export function ThemePreferencesPanel() {
 
       <div style={previewPaneStyle}>
         <div style={previewStickyStyle}>
-          <div style={previewTitleStyle}>Live Preview</div>
+          <div style={previewTitleStyle}>Pré-visualização</div>
           <ThemePreview />
           <div style={editorPreviewStyle}>
             <SqlCodeEditor value={PREVIEW_SQL} readOnly />
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function RangeField({
+  field,
+  value,
+  defaultValue,
+  onChange,
+}: {
+  field: ThemeField;
+  value: number;
+  defaultValue: number;
+  onChange: (value: number) => void;
+}) {
+  const modified = value !== defaultValue;
+
+  return (
+    <div style={colorFieldStyle}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <label style={fieldLabelStyle}>{field.label}</label>
+        {modified && (
+          <button onClick={() => onChange(defaultValue)} title="Restaurar valor" style={tinyButtonStyle}>
+            Restaurar
+          </button>
+        )}
+      </div>
+      <div style={rangeInputRowStyle}>
+        <input
+          type="range"
+          min={field.min ?? 0}
+          max={field.max ?? 1}
+          step={field.step ?? 0.01}
+          value={value}
+          onChange={(event) => onChange(Number(event.target.value))}
+          style={{ accentColor: "var(--focus-color)", flex: 1 }}
+        />
+        <input
+          value={value.toFixed(2)}
+          onChange={(event) => onChange(Number(event.target.value))}
+          spellCheck={false}
+          style={numberInputStyle}
+        />
       </div>
     </div>
   );
@@ -238,8 +302,8 @@ function ColorField({
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <label style={fieldLabelStyle}>{field.label}</label>
         {modified && (
-          <button onClick={() => onChange(defaultValue)} title="Reset color" style={tinyButtonStyle}>
-            Reset
+          <button onClick={() => onChange(defaultValue)} title="Restaurar cor" style={tinyButtonStyle}>
+            Restaurar
           </button>
         )}
       </div>
@@ -266,20 +330,20 @@ function ThemePreview() {
     <div style={previewCardStyle}>
       <div style={previewTopbarStyle}>
         <strong>Moon For Oracle</strong>
-        <span style={statusPillStyle}>Connected</span>
-        <button style={previewPrimaryButtonStyle}>Execute</button>
-        <button>Connect</button>
+        <span style={statusPillStyle}>Conectado</span>
+        <button style={previewPrimaryButtonStyle}>Executar</button>
+        <button>Conectar</button>
       </div>
       <div style={previewBodyStyle}>
         <aside style={previewSidebarStyle}>
-          <div style={previewSidebarTitleStyle}>Connections</div>
+          <div style={previewSidebarTitleStyle}>Conexões</div>
           <div style={previewSidebarItemActiveStyle}>HR@ORCL</div>
-          <div style={previewSidebarItemStyle}>Tables</div>
-          <div style={previewSidebarItemStyle}>Packages</div>
+          <div style={previewSidebarItemStyle}>Tabelas</div>
+          <div style={previewSidebarItemStyle}>Pacotes</div>
         </aside>
         <main style={previewMainStyle}>
           <div style={previewTabsStyle}>
-            <span style={previewTabActiveStyle}>SQL Editor</span>
+            <span style={previewTabActiveStyle}>Editor SQL</span>
             <span style={previewTabStyle}>EMPLOYEES</span>
           </div>
           <div style={previewPanelStyle}>
@@ -288,16 +352,16 @@ function ThemePreview() {
             <div style={previewGridHeaderStyle}>STATUS</div>
             <div style={previewCellSelectedStyle}>101</div>
             <div style={previewCellStyle}>Ada Lovelace</div>
-            <div style={previewCellModifiedStyle}>Modified</div>
+            <div style={previewCellModifiedStyle}>Modificado</div>
             <div style={previewCellAltStyle}>102</div>
             <div style={previewCellAltStyle}>Grace Hopper</div>
-            <div style={previewCellEditingStyle}>Editing</div>
+            <div style={previewCellEditingStyle}>Editando</div>
           </div>
           <div style={feedbackRowStyle}>
             <span style={{ color: "var(--info)" }}>Info</span>
-            <span style={{ color: "var(--success)" }}>Success</span>
-            <span style={{ color: "var(--warning)" }}>Warning</span>
-            <span style={{ color: "var(--danger)" }}>Error</span>
+            <span style={{ color: "var(--success)" }}>Sucesso</span>
+            <span style={{ color: "var(--warning)" }}>Aviso</span>
+            <span style={{ color: "var(--danger)" }}>Erro</span>
           </div>
         </main>
       </div>
@@ -321,8 +385,10 @@ const fieldsGridStyle: React.CSSProperties = { display: "grid", gridTemplateColu
 const colorFieldStyle: React.CSSProperties = { minWidth: 0, display: "flex", flexDirection: "column", gap: 5 };
 const fieldLabelStyle: React.CSSProperties = { fontSize: 11, color: "var(--text-secondary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
 const colorInputRowStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: 6 };
+const rangeInputRowStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8 };
 const colorPickerStyle: React.CSSProperties = { width: 28, height: 24, padding: 0, border: "1px solid var(--border-color)", borderRadius: "var(--radius)", background: "transparent", flexShrink: 0 };
 const hexInputStyle: React.CSSProperties = { width: "100%", minWidth: 0, padding: "4px 6px", border: "1px solid var(--border-color)", borderRadius: "var(--radius)", background: "var(--app-bg)", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 11 };
+const numberInputStyle: React.CSSProperties = { width: 54, minWidth: 54, padding: "4px 6px", border: "1px solid var(--border-color)", borderRadius: "var(--radius)", background: "var(--app-bg)", color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 11 };
 const tinyButtonStyle: React.CSSProperties = { padding: "0 4px", fontSize: 10, border: "none", background: "transparent", color: "var(--text-muted)" };
 const fontControlStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: 10 };
 const selectStyle: React.CSSProperties = { flex: 1, minWidth: 0, padding: "4px 6px", background: "var(--app-bg)", color: "var(--text-primary)", border: "1px solid var(--border-color)", borderRadius: "var(--radius)", fontSize: 12 };

@@ -3,6 +3,7 @@ import type { DatabaseObjectType, DatabaseObjectSummary, SavedConnection } from 
 import { useObjectList, type SectionState } from "../hooks/useObjectList";
 
 interface SidebarProps {
+  collapsed: boolean;
   isConnected: boolean;
   onObjectSelect: (type: DatabaseObjectType, name: string) => void;
   savedConnections: SavedConnection[];
@@ -12,6 +13,7 @@ interface SidebarProps {
   onEditConnection: (conn: SavedConnection) => void;
   onDeleteConnection: (id: string, name: string) => void;
   onToggleFavorite: (id: string) => void;
+  onToggleCollapse: () => void;
 }
 
 interface SectionDef {
@@ -32,6 +34,7 @@ const SECTIONS: SectionDef[] = [
 const EMPTY_SECTION: SectionState = { objects: [], loading: false, error: null, loaded: false };
 
 export function Sidebar({
+  collapsed,
   isConnected,
   onObjectSelect,
   savedConnections,
@@ -41,6 +44,7 @@ export function Sidebar({
   onEditConnection,
   onDeleteConnection,
   onToggleFavorite,
+  onToggleCollapse,
 }: SidebarProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState("");
@@ -67,6 +71,33 @@ export function Sidebar({
 
   const lowerFilter = filter.toLowerCase();
 
+  if (collapsed) {
+    return (
+      <div style={collapsedSidebarStyle}>
+        <button onClick={onToggleCollapse} title="Expand sidebar" aria-label="Expand sidebar" style={collapseToggleButtonStyle}>
+          {"\u203A"}
+        </button>
+        <div style={collapsedSidebarIconGroupStyle}>
+          <div title="Connections" style={collapsedSidebarIconStyle}>
+            {"\u26A1"}
+          </div>
+          <div title="Database Objects" style={collapsedSidebarIconStyle}>
+            {"\u25A6"}
+          </div>
+        </div>
+        <div style={collapsedSidebarFooterStyle}>
+          <span
+            title={isConnected ? "Connected" : "Disconnected"}
+            style={{
+              ...collapsedSidebarStatusStyle,
+              background: isConnected ? "var(--status-connected)" : "var(--text-muted)",
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{
       width: "var(--sidebar-width)",
@@ -77,6 +108,12 @@ export function Sidebar({
       flexShrink: 0,
       overflow: "hidden",
     }}>
+      <div style={sidebarHeaderRowStyle}>
+        <span style={sidebarHeaderLabelStyle}>Workspace</span>
+        <button onClick={onToggleCollapse} title="Collapse sidebar" aria-label="Collapse sidebar" style={collapseToggleButtonStyle}>
+          {"\u2039"}
+        </button>
+      </div>
       {/* ── Saved Connections section ── */}
       <SavedConnectionsSection
         connections={savedConnections}
@@ -420,6 +457,81 @@ const popoverBtnStyle: React.CSSProperties = {
 };
 
 // ── Section component ──
+
+const sidebarHeaderRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "6px 8px 6px 12px",
+  borderBottom: "1px solid var(--border-subtle)",
+  background: "color-mix(in srgb, var(--sidebar-bg) 82%, black)",
+};
+
+const sidebarHeaderLabelStyle: React.CSSProperties = {
+  fontSize: 10,
+  color: "var(--text-muted)",
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  fontWeight: 600,
+};
+
+const collapseToggleButtonStyle: React.CSSProperties = {
+  width: 24,
+  height: 24,
+  padding: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "transparent",
+  border: "1px solid var(--border-subtle)",
+  color: "var(--text-muted)",
+  lineHeight: 1,
+  fontSize: 16,
+  flexShrink: 0,
+};
+
+const collapsedSidebarStyle: React.CSSProperties = {
+  width: 42,
+  background: "var(--sidebar-bg)",
+  borderRight: "1px solid var(--border-color)",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  flexShrink: 0,
+  overflow: "hidden",
+  padding: "6px 0",
+  gap: 10,
+};
+
+const collapsedSidebarIconGroupStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  gap: 8,
+  paddingTop: 4,
+};
+
+const collapsedSidebarIconStyle: React.CSSProperties = {
+  width: 26,
+  height: 26,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 13,
+  color: "var(--text-secondary)",
+};
+
+const collapsedSidebarFooterStyle: React.CSSProperties = {
+  marginTop: "auto",
+  paddingBottom: 4,
+};
+
+const collapsedSidebarStatusStyle: React.CSSProperties = {
+  display: "block",
+  width: 8,
+  height: 8,
+  borderRadius: 999,
+};
 
 interface SidebarSectionProps {
   def: SectionDef;

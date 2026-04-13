@@ -52,6 +52,8 @@
   --text-selection-bg: rgba(137, 180, 250, 0.18);
   --text-selection-color: #cdd6f4;
   --editor-cursor: #89b4fa;
+  --editor-scope-line-color: #6c7086;
+  --editor-scope-line-opacity: 0.34;
 
   --bg-primary: #1e1e2e;
   --bg-secondary: #181825;
