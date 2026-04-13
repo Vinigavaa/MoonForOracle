@@ -5,15 +5,17 @@ import { EditorView, keymap, placeholder as cmPlaceholder, lineNumbers, highligh
 import { sql, PLSQL } from "@codemirror/lang-sql";
 import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
-import { search, openSearchPanel, closeSearchPanel } from "@codemirror/search";
+import { search, searchKeymap } from "@codemirror/search";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import type { DatabaseObjectSuggestion } from "@gavadb/types";
+import type { DatabaseObjectSuggestion, SearchColumnsRequest, SqlColumnSuggestion } from "@gavadb/types";
 import { extractObjectReferenceAtCursor, type SqlObjectReference } from "@gavadb/utils";
 import type { SqlEditorExecutionSnapshot } from "../lib/sqlExecutionTarget";
 import { buildExecutionSnapshot } from "../lib/sqlExecutionTarget";
 import type { EditorThemeConfig } from "../lib/editorTheme";
 import { useEditorTheme } from "../hooks/EditorThemeContext";
 import { sqlScopeExtension } from "../lib/sqlScopeExtension";
+import { calculateAutocompleteTarget, replaceAutocompleteRange, resolveAutocompleteTarget, type SqlAutocompleteTarget } from "../lib/sqlAutocomplete";
+import { detectSqlAutocompleteContext } from "../lib/sqlAutocompleteContext";
 
 interface SqlCodeEditorProps {
   value: string;
@@ -22,6 +24,7 @@ interface SqlCodeEditorProps {
   onExecuteAll?: () => void;
   onOpenObject?: (name: string) => void | Promise<void>;
   onSearchObjectsByPrefix?: (prefix: string, limit?: number) => Promise<DatabaseObjectSuggestion[]>;
+  onSearchColumns?: (request: SearchColumnsRequest) => Promise<SqlColumnSuggestion[]>;
   onExecutionContextChange?: (snapshot: SqlEditorExecutionSnapshot) => void;
   disabled?: boolean;
   readOnly?: boolean;
@@ -31,13 +34,17 @@ interface SqlCodeEditorProps {
 interface AutocompleteState {
   open: boolean;
   loading: boolean;
-  items: DatabaseObjectSuggestion[];
+  items: SqlAutocompleteItem[];
   selectedIndex: number;
   query: string;
   top: number;
   left: number;
-  target: SqlObjectReference | null;
+  target: SqlAutocompleteTarget | null;
 }
+
+type SqlAutocompleteItem =
+  | { kind: "object"; value: DatabaseObjectSuggestion }
+  | { kind: "column"; value: SqlColumnSuggestion };
 
 export interface SqlCodeEditorHandle {
   getExecutionSnapshot: () => SqlEditorExecutionSnapshot;
@@ -281,6 +288,7 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
   onExecuteAll,
   onOpenObject,
   onSearchObjectsByPrefix,
+  onSearchColumns,
   onExecutionContextChange,
   disabled,
   readOnly,
@@ -295,6 +303,7 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
   const onExecuteAllRef = useRef(onExecuteAll);
   const onOpenObjectRef = useRef(onOpenObject);
   const onSearchObjectsByPrefixRef = useRef(onSearchObjectsByPrefix);
+  const onSearchColumnsRef = useRef(onSearchColumns);
   const onExecutionContextChangeRef = useRef(onExecutionContextChange);
   const disabledRef = useRef(disabled);
   const readOnlyRef = useRef(readOnly || disabled);
@@ -310,6 +319,7 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
   const parsedDocRef = useRef(value);
   const parseTimeoutRef = useRef<number | null>(null);
   const autocompleteRequestRef = useRef(0);
+  const autocompleteItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const autocompleteRef = useRef<AutocompleteState>({
     open: false,
     loading: false,
@@ -337,6 +347,7 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
   onExecuteAllRef.current = onExecuteAll;
   onOpenObjectRef.current = onOpenObject;
   onSearchObjectsByPrefixRef.current = onSearchObjectsByPrefix;
+  onSearchColumnsRef.current = onSearchColumns;
   onExecutionContextChangeRef.current = onExecutionContextChange;
   disabledRef.current = disabled;
   readOnlyRef.current = readOnly || disabled;
@@ -404,55 +415,46 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
     });
   }
 
-  function applyAutocompleteSuggestion(view: EditorView, suggestion: DatabaseObjectSuggestion) {
-    setAutocomplete((current) => {
-      if (!current.target) return current;
+  function applyAutocompleteSuggestion(view: EditorView, item: SqlAutocompleteItem) {
+    const currentAutocomplete = autocompleteRef.current;
+    if (!currentAutocomplete.target) return;
 
-      view.dispatch({
-        changes: {
-          from: current.target.object.from,
-          to: current.target.object.to,
-          insert: suggestion.name,
-        },
-        selection: { anchor: current.target.object.from + suggestion.name.length },
-        scrollIntoView: true,
-      });
+    const cursor = view.state.selection.main.head;
+    const document = view.state.doc.toString();
+    const resolvedTarget = resolveAutocompleteTarget(document, cursor, currentAutocomplete.target);
+    if (!resolvedTarget) {
+      closeAutocomplete();
+      return;
+    }
 
-      window.requestAnimationFrame(() => view.focus());
-
-      return {
-        open: false,
-        loading: false,
-        items: [],
-        selectedIndex: 0,
-        query: "",
-        top: 0,
-        left: 0,
-        target: null,
-      };
-    });
+    replaceAutocompleteRange(view, resolvedTarget, getAutocompleteInsertText(item));
+    closeAutocomplete();
+    publishExecutionContext(view, true);
+    window.requestAnimationFrame(() => view.focus());
   }
 
   async function triggerPrefixAutocomplete(view: EditorView) {
-    const searchFn = onSearchObjectsByPrefixRef.current;
-    if (!searchFn || disabledRef.current || readOnlyRef.current) {
+    const objectSearchFn = onSearchObjectsByPrefixRef.current;
+    const columnSearchFn = onSearchColumnsRef.current;
+    if (!objectSearchFn || !columnSearchFn || disabledRef.current || readOnlyRef.current) {
       closeAutocomplete();
       return true;
     }
 
     const cursor = view.state.selection.main.head;
     const document = view.state.doc.toString();
-    const target = extractObjectReferenceAtCursor(document, cursor);
+    const target = calculateAutocompleteTarget(document, cursor);
     if (!target) {
       closeAutocomplete();
       return true;
     }
 
-    const coords = view.coordsAtPos(target.object.to) ?? view.coordsAtPos(cursor);
+    const coords = view.coordsAtPos(target.anchor) ?? view.coordsAtPos(cursor);
     const containerRect = containerRef.current?.getBoundingClientRect();
     const left = coords && containerRect ? coords.left - containerRect.left : 12;
     const top = coords && containerRect ? coords.bottom - containerRect.top + 6 : 36;
-    const query = target.qualifier ? `${target.qualifier.text}.${target.object.text}` : target.object.text;
+    const context = detectSqlAutocompleteContext(document, cursor, target);
+    const query = context.kind === "column" ? context.prefix : context.query;
     const requestId = ++autocompleteRequestRef.current;
 
     setAutocomplete({
@@ -465,9 +467,16 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
       left,
       target,
     });
+    autocompleteItemRefs.current = [];
 
     try {
-      const items = await searchFn(query, 20);
+      const items = context.kind === "column"
+        ? (await columnSearchFn({
+          tables: context.tables,
+          prefix: context.prefix,
+          limit: 50,
+        })).map((value: SqlColumnSuggestion) => ({ kind: "column", value } satisfies SqlAutocompleteItem))
+        : (await objectSearchFn(context.query, 20)).map((value: DatabaseObjectSuggestion) => ({ kind: "object", value } satisfies SqlAutocompleteItem));
       if (autocompleteRequestRef.current !== requestId) return true;
 
       setAutocomplete((current) => {
@@ -624,6 +633,7 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
       ]),
       history(),
       keymap.of(historyKeymap),
+      keymap.of(searchKeymap),
       keymap.of(defaultKeymap),
       sql({ dialect: PLSQL }),
       lineNumbers(),
@@ -757,6 +767,12 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
     }
   }, [value]);
 
+  useEffect(() => {
+    if (!autocomplete.open) return;
+    const activeItem = autocompleteItemRefs.current[autocomplete.selectedIndex];
+    activeItem?.scrollIntoView({ block: "nearest" });
+  }, [autocomplete.open, autocomplete.selectedIndex]);
+
   return (
     <div
       ref={containerRef}
@@ -791,13 +807,16 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
 
           {!autocomplete.loading && autocomplete.items.length === 0 && (
             <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-muted)" }}>
-              No objects found for <span style={{ color: "var(--text-primary)", fontFamily: "var(--font-mono)" }}>{autocomplete.query}</span>
+              No objects found for <span style={{ color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>{autocomplete.query}</span>
             </div>
           )}
 
           {!autocomplete.loading && autocomplete.items.map((item, index) => (
             <button
-              key={`${item.objectKind}:${item.schema}:${item.name}`}
+              key={getAutocompleteItemKey(item)}
+              ref={(node) => {
+                autocompleteItemRefs.current[index] = node;
+              }}
               onMouseDown={(event) => {
                 event.preventDefault();
                 const view = viewRef.current;
@@ -821,12 +840,12 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
                 textAlign: "left",
               }}
             >
-              <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {item.name}
+                <span style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+                <span style={{ fontFamily: "var(--font-ui)", fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {getAutocompleteItemLabel(item)}
                 </span>
                 <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-                  {item.schema}
+                  {getAutocompleteItemDescription(item)}
                 </span>
               </span>
               <span style={{
@@ -834,9 +853,9 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
                 fontSize: 10,
                 fontWeight: 700,
                 letterSpacing: "0.04em",
-                color: item.objectKind === "TABLE" ? "var(--focus-color)" : "var(--text-secondary)",
+                color: getAutocompleteItemBadgeColor(item),
               }}>
-                {item.objectKind}
+                {getAutocompleteItemBadge(item)}
               </span>
             </button>
           ))}
@@ -845,3 +864,35 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
     </div>
   );
 }));
+
+function getAutocompleteInsertText(item: SqlAutocompleteItem): string {
+  return item.value.name;
+}
+
+function getAutocompleteItemKey(item: SqlAutocompleteItem): string {
+  return item.kind === "object"
+    ? `object:${item.value.objectKind}:${item.value.schema}:${item.value.name}`
+    : `column:${item.value.schema}:${item.value.table}:${item.value.name}:${item.value.alias ?? ""}`;
+}
+
+function getAutocompleteItemLabel(item: SqlAutocompleteItem): string {
+  return item.value.name;
+}
+
+function getAutocompleteItemDescription(item: SqlAutocompleteItem): string {
+  if (item.kind === "object") {
+    return item.value.schema;
+  }
+
+  const alias = item.value.alias ? `${item.value.alias} → ` : "";
+  return `${alias}${item.value.table} · ${item.value.dataType}`;
+}
+
+function getAutocompleteItemBadge(item: SqlAutocompleteItem): string {
+  return item.kind === "object" ? item.value.objectKind : "COLUMN";
+}
+
+function getAutocompleteItemBadgeColor(item: SqlAutocompleteItem): string {
+  if (item.kind === "column") return "var(--warning)";
+  return item.value.objectKind === "TABLE" ? "var(--focus-color)" : "var(--text-secondary)";
+}

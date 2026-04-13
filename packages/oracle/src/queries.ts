@@ -5,6 +5,21 @@ import type { DatabaseObjectType, OracleObjectKind } from "@gavadb/types";
  * Usa ALL_OBJECTS para ver objetos acessíveis pelo usuário conectado.
  */
 export function listObjectsSql(type: DatabaseObjectType): string {
+  if (type === "ckts" || type === "ckcs") {
+    const prefix = type === "ckts" ? "CKT" : "CKC";
+    return `
+      SELECT
+        constraint_name AS name,
+        owner AS schema,
+        CASE status WHEN 'ENABLED' THEN 'VALID' ELSE 'INVALID' END AS status
+      FROM all_constraints
+      WHERE constraint_type = 'C'
+        AND constraint_name LIKE '${prefix}%'
+        AND owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+      ORDER BY constraint_name
+    `;
+  }
+
   const oracleType = DB_OBJECT_TYPE_MAP[type];
   return `
     SELECT object_name AS name, owner AS schema, status
@@ -20,6 +35,9 @@ export function listObjectsSql(type: DatabaseObjectType): string {
  * Retorna linhas ordenadas que devem ser concatenadas.
  */
 export function getSourceCodeSql(type: DatabaseObjectType, name: string): string {
+  if (type === "ckts" || type === "ckcs") {
+    throw new Error(`Object type ${type} does not expose source code`);
+  }
   const oracleType = DB_OBJECT_TYPE_MAP[type];
   return `
     SELECT line, text
@@ -90,6 +108,27 @@ export function getPackageSourceSql(name: string): string {
   `;
 }
 
+export function getCheckConstraintSql(name: string): string {
+  return `
+    SELECT
+      cons.constraint_name,
+      cons.table_name,
+      cons.status,
+      cons.validated,
+      cons.search_condition_vc,
+      cols.column_name,
+      cols.position
+    FROM all_constraints cons
+    LEFT JOIN all_cons_columns cols
+      ON cols.owner = cons.owner
+     AND cols.constraint_name = cons.constraint_name
+    WHERE cons.constraint_type = 'C'
+      AND cons.constraint_name = '${name}'
+      AND cons.owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+    ORDER BY cols.position NULLS LAST
+  `;
+}
+
 /** Mapeia DatabaseObjectType da app para OBJECT_TYPE do Oracle */
 const DB_OBJECT_TYPE_MAP: Record<DatabaseObjectType, string> = {
   tables: "TABLE",
@@ -98,6 +137,8 @@ const DB_OBJECT_TYPE_MAP: Record<DatabaseObjectType, string> = {
   packages: "PACKAGE",
   procedures: "PROCEDURE",
   functions: "FUNCTION",
+  ckts: "CKT",
+  ckcs: "CKC",
 };
 
 export const SEARCHABLE_OBJECT_KINDS: readonly OracleObjectKind[] = [
@@ -107,6 +148,8 @@ export const SEARCHABLE_OBJECT_KINDS: readonly OracleObjectKind[] = [
   "PROCEDURE",
   "FUNCTION",
   "TRIGGER",
+  "CKT",
+  "CKC",
 ];
 
 export function oracleObjectKindToDatabaseType(kind: OracleObjectKind): DatabaseObjectType {
@@ -123,6 +166,10 @@ export function oracleObjectKindToDatabaseType(kind: OracleObjectKind): Database
       return "procedures";
     case "FUNCTION":
       return "functions";
+    case "CKT":
+      return "ckts";
+    case "CKC":
+      return "ckcs";
   }
 
   const unsupportedKind: never = kind;

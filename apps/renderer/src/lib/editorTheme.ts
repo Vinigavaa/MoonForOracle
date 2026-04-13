@@ -70,6 +70,8 @@ export interface EditorThemeConfig {
 }
 
 const STORAGE_KEY = "gavadb:editor-theme";
+export const FIXED_FONT_FAMILY = '"Cascadia Code", "Consolas", monospace';
+export const UI_FONT_FAMILY = 'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
 export const DEFAULT_THEME: EditorThemeConfig = {
   appBg: "#1e1e2e",
@@ -133,7 +135,7 @@ export const DEFAULT_THEME: EditorThemeConfig = {
   scopeLineColor: "#6c7086",
   scopeLineOpacity: 0.34,
   fontSize: 13,
-  fontFamily: '"Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace',
+  fontFamily: FIXED_FONT_FAMILY,
   baseTheme: "dark",
 };
 
@@ -206,45 +208,52 @@ export const THEME_CSS_VARS: Record<keyof EditorThemeConfig, string | null> = {
 export function loadTheme(): EditorThemeConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_THEME };
+    if (!raw) return normalizeThemeConfig(DEFAULT_THEME);
     const parsed = JSON.parse(raw) as Partial<EditorThemeConfig>;
-    return { ...DEFAULT_THEME, ...parsed };
+    return normalizeThemeConfig({ ...DEFAULT_THEME, ...parsed });
   } catch {
-    return { ...DEFAULT_THEME };
+    return normalizeThemeConfig(DEFAULT_THEME);
   }
 }
 
 export function saveTheme(config: EditorThemeConfig): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeThemeConfig(config)));
 }
 
 export function resetTheme(): EditorThemeConfig {
   localStorage.removeItem(STORAGE_KEY);
-  return { ...DEFAULT_THEME };
+  return normalizeThemeConfig(DEFAULT_THEME);
 }
 
 export function applyThemeToDocument(config: EditorThemeConfig, root: HTMLElement = document.documentElement): void {
+  const normalized = normalizeThemeConfig(config);
   for (const key of Object.keys(THEME_CSS_VARS) as Array<keyof EditorThemeConfig>) {
     const cssVar = THEME_CSS_VARS[key];
-    if (cssVar && (typeof config[key] === "string" || typeof config[key] === "number")) {
-      root.style.setProperty(cssVar, String(config[key]));
+    if (cssVar && (typeof normalized[key] === "string" || typeof normalized[key] === "number")) {
+      root.style.setProperty(cssVar, String(normalized[key]));
     }
   }
 
-  root.style.setProperty("--bg-primary", config.appBg);
-  root.style.setProperty("--bg-secondary", config.sidebarBg);
-  root.style.setProperty("--bg-surface", config.surfaceBg);
-  root.style.setProperty("--bg-hover", config.hoverBg);
-  root.style.setProperty("--bg-active", config.activeBg);
-  root.style.setProperty("--border-subtle", config.dividerColor);
-  root.style.setProperty("--accent", config.focusColor);
-  root.style.setProperty("--accent-hover", config.focusColor);
-  root.style.setProperty("--text-selection-color", config.textPrimary);
+  root.style.setProperty("--bg-primary", normalized.appBg);
+  root.style.setProperty("--bg-secondary", normalized.sidebarBg);
+  root.style.setProperty("--bg-surface", normalized.surfaceBg);
+  root.style.setProperty("--bg-hover", normalized.hoverBg);
+  root.style.setProperty("--bg-active", normalized.activeBg);
+  root.style.setProperty("--border-subtle", normalized.dividerColor);
+  root.style.setProperty("--accent", normalized.focusColor);
+  root.style.setProperty("--accent-hover", normalized.focusColor);
+  root.style.setProperty("--text-selection-color", normalized.textPrimary);
+  root.style.setProperty("--font-ui", UI_FONT_FAMILY);
+  root.style.setProperty("--font-mono", normalized.fontFamily);
 }
 
 export function isThemeDefault(config: EditorThemeConfig): boolean {
+  return areThemesEqual(config, DEFAULT_THEME);
+}
+
+export function areThemesEqual(a: EditorThemeConfig, b: EditorThemeConfig): boolean {
   return (Object.keys(DEFAULT_THEME) as Array<keyof EditorThemeConfig>).every(
-    (key) => config[key] === DEFAULT_THEME[key],
+    (key) => a[key] === b[key],
   );
 }
 
@@ -259,6 +268,14 @@ export function getContrastWarning(theme: EditorThemeConfig): string | null {
     return "Editor text may be hard to read on the SQL editor background.";
   }
   return null;
+}
+
+export function normalizeThemeConfig(config: Partial<EditorThemeConfig>): EditorThemeConfig {
+  return {
+    ...DEFAULT_THEME,
+    ...config,
+    fontFamily: FIXED_FONT_FAMILY,
+  };
 }
 
 function contrastRatio(a: string, b: string): number {

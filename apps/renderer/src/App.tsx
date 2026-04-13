@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import type { DatabaseObjectType, ConnectionConfig, SavedConnection } from "@gavadb/types";
 import { Toolbar } from "./components/Toolbar";
 import { Sidebar } from "./components/Sidebar";
 import { TabPanel, type Tab } from "./components/TabPanel";
-import { SqlEditor } from "./components/SqlEditor";
+import { SqlEditor, type SqlEditorHandle } from "./components/SqlEditor";
 import { ObjectViewer } from "./components/ObjectViewer";
 import { ThemePreferencesPanel } from "./components/ThemePreferencesPanel";
 import { ConnectionDialog } from "./components/ConnectionDialog";
@@ -13,7 +13,6 @@ import { useToastContext } from "./hooks/ToastContext";
 import { loadSidebarPreferences, saveSidebarPreferences } from "./lib/sidebarPreferences";
 
 const SQL_TAB_ID = "sql-editor";
-const PREFS_TAB_ID = "preferences";
 
 interface ObjectTab {
   id: string;
@@ -49,27 +48,53 @@ export function App() {
   const [editingConnection, setEditingConnection] = useState<SavedConnection | null>(null);
   const [editingPassword, setEditingPassword] = useState<string>("");
   const [connectingId, setConnectingId] = useState<string | null>(null);
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [objectTabs, setObjectTabs] = useState<ObjectTab[]>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => loadSidebarPreferences().collapsed);
   const executeTriggerRef = useRef<(() => void) | null>(null);
   const executeAllTriggerRef = useRef<(() => void) | null>(null);
+  const sqlEditorRef = useRef<SqlEditorHandle | null>(null);
 
   useEffect(() => {
     const preferences = loadSidebarPreferences();
     saveSidebarPreferences({ ...preferences, collapsed: sidebarCollapsed });
   }, [sidebarCollapsed]);
 
-  // Listen for backend errors via IPC and surface as toasts
+  const restoreFocusAfterPreferences = useCallback(() => {
+    window.setTimeout(() => {
+      sqlEditorRef.current?.focus();
+    }, 0);
+  }, []);
+
+  const openPreferences = useCallback(() => {
+    setPreferencesOpen(true);
+  }, []);
+
+  const closePreferences = useCallback(() => {
+    setPreferencesOpen(false);
+    restoreFocusAfterPreferences();
+  }, [restoreFocusAfterPreferences]);
+
   useEffect(() => {
     if (!window.gavadb) return;
     const cleanup = window.gavadb.onError((err) => {
-      // Only toast errors not already handled by the connection modal
       if (!showConnModal) {
         toast.error(err.message);
       }
     });
     return cleanup;
   }, [toast, showConnModal]);
+
+  useEffect(() => {
+    if (!preferencesOpen) return undefined;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closePreferences();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [preferencesOpen]);
 
   const handleOpenConnect = useCallback(() => {
     clearError();
@@ -148,13 +173,14 @@ export function App() {
     }
   }, [isConnecting, clearError]);
 
-  // Auto-close modal and show toast on successful connection
   const prevConnectedRef = useRef(false);
-  if (isConnected && !prevConnectedRef.current) {
-    if (showConnModal) setShowConnModal(false);
-    toast.success("Connected to database");
-  }
-  prevConnectedRef.current = isConnected;
+  useEffect(() => {
+    if (isConnected && !prevConnectedRef.current) {
+      if (showConnModal) setShowConnModal(false);
+      toast.success("Connected to database");
+    }
+    prevConnectedRef.current = isConnected;
+  }, [isConnected, showConnModal, toast]);
 
   const handleDisconnect = useCallback(async () => {
     if (transactionState.hasPendingChanges) {
@@ -245,21 +271,19 @@ export function App() {
     });
   }, []);
 
-  // Clean up object tabs on disconnect
   const prevConnected2 = useRef(false);
-  if (!isConnected && prevConnected2.current) {
-    if (objectTabs.length > 0) {
+  useEffect(() => {
+    if (!isConnected && prevConnected2.current && objectTabs.length > 0) {
       setObjectTabs([]);
       setActiveTab(SQL_TAB_ID);
     }
-  }
-  prevConnected2.current = isConnected;
+    prevConnected2.current = isConnected;
+  }, [isConnected, objectTabs.length]);
 
   const tabs: Tab[] = [{ id: SQL_TAB_ID, label: "SQL Editor" }];
   for (const ot of objectTabs) {
     tabs.push({ id: ot.id, label: ot.name, closable: true });
   }
-  tabs.push({ id: PREFS_TAB_ID, label: "⚙ Preferences", closable: false });
 
   const activeObjectTab = objectTabs.find((t) => t.id === activeTab);
 
@@ -277,6 +301,7 @@ export function App() {
         onRollback={handleRollback}
         onExecuteSql={handleExecuteSql}
         onExecuteAllSql={handleExecuteAllSql}
+        onOpenPreferences={openPreferences}
       />
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
@@ -302,6 +327,7 @@ export function App() {
         >
           <div style={{ display: activeTab === SQL_TAB_ID ? "contents" : "none" }}>
             <SqlEditor
+              ref={sqlEditorRef}
               isConnected={isConnected}
               executeTriggerRef={executeTriggerRef}
               executeAllTriggerRef={executeAllTriggerRef}
@@ -316,10 +342,16 @@ export function App() {
               objectName={activeObjectTab.name}
             />
           )}
-
-          {activeTab === PREFS_TAB_ID && <ThemePreferencesPanel />}
         </TabPanel>
       </div>
+
+      {preferencesOpen && (
+        <div style={preferencesOverlayStyle} onClick={closePreferences}>
+          <div style={preferencesDrawerStyle} onClick={(event) => event.stopPropagation()}>
+            <ThemePreferencesPanel onClose={closePreferences} />
+          </div>
+        </div>
+      )}
 
       <ConnectionDialog
         open={showConnModal}
@@ -338,3 +370,21 @@ export function App() {
     </div>
   );
 }
+
+const preferencesOverlayStyle: CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0, 0, 0, 0.36)",
+  display: "flex",
+  justifyContent: "flex-end",
+  zIndex: 40,
+};
+
+const preferencesDrawerStyle: CSSProperties = {
+  width: "min(1240px, calc(100vw - 48px))",
+  height: "100vh",
+  background: "var(--panel-bg)",
+  borderLeft: "1px solid var(--border-color)",
+  boxShadow: "-16px 0 48px rgba(0, 0, 0, 0.28)",
+  overflow: "hidden",
+};

@@ -5,7 +5,9 @@ export type DatabaseObjectType =
   | "triggers"
   | "packages"
   | "procedures"
-  | "functions";
+  | "functions"
+  | "ckts"
+  | "ckcs";
 
 export type OracleObjectKind =
   | "TABLE"
@@ -13,7 +15,9 @@ export type OracleObjectKind =
   | "TRIGGER"
   | "PACKAGE"
   | "PROCEDURE"
-  | "FUNCTION";
+  | "FUNCTION"
+  | "CKT"
+  | "CKC";
 
 /** Resumo de um objeto do banco — listagem leve sem código-fonte */
 export interface DatabaseObjectSummary {
@@ -46,29 +50,9 @@ export interface ConstraintColumnInfo {
   position: number;
 }
 
-export interface ForeignKeyColumnMapping {
-  position: number;
-  localColumn: string;
-  referencedColumn: string;
-}
-
 export interface PrimaryKeyDetail {
   constraintName: string;
   columns: ConstraintColumnInfo[];
-}
-
-export interface ForeignKeyDetail {
-  constraintName: string;
-  referencedSchema: string;
-  referencedTable: string;
-  columns: ForeignKeyColumnMapping[];
-}
-
-export interface IncomingReferenceDetail {
-  constraintName: string;
-  sourceSchema: string;
-  sourceTable: string;
-  columns: ForeignKeyColumnMapping[];
 }
 
 /** Detalhe estruturado de uma tabela */
@@ -77,8 +61,6 @@ export interface TableDetail {
   objectName: string;
   columns: ColumnInfo[];
   primaryKey: PrimaryKeyDetail | null;
-  foreignKeys: ForeignKeyDetail[];
-  referencedBy: IncomingReferenceDetail[];
 }
 
 /** Detalhe estruturado de uma view */
@@ -97,5 +79,17 @@ export interface SourceDetail {
   source: string;
 }
 
+/** Detalhe estruturado de uma check constraint navegável */
+export interface ConstraintDetail {
+  kind: "constraint";
+  objectName: string;
+  objectType: "ckts" | "ckcs";
+  tableName: string;
+  searchCondition: string;
+  columns: ConstraintColumnInfo[];
+  status: "ENABLED" | "DISABLED";
+  validated: "VALIDATED" | "NOT VALIDATED";
+ }
+
 /** Resposta unificada de db:get-source */
-export type ObjectDetailResponse = TableDetail | ViewDetail | SourceDetail;
+export type ObjectDetailResponse = TableDetail | ViewDetail | SourceDetail | ConstraintDetail;

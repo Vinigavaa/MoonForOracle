@@ -16,6 +16,7 @@ import type {
   TransactionState,
   TnsFileRequest,
   SaveConnectionRequest,
+  SearchColumnsRequest,
 } from "@gavadb/types";
 import * as useCases from "../use-cases";
 import { SavedConnectionsStore } from "../lib/saved-connections-store";
@@ -298,6 +299,15 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       return ok(objects);
     } catch (err) {
       return fail(logIpcError(IPC_CHANNELS.DB_SEARCH_OBJECTS, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DB_SEARCH_COLUMNS, async (_event, request: SearchColumnsRequest) => {
+    try {
+      const columns = await useCases.searchColumns(repo, request);
+      return ok(columns);
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.DB_SEARCH_COLUMNS, err));
     }
   });
 

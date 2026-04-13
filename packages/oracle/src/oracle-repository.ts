@@ -21,8 +21,9 @@ import type {
   ColumnInfo,
   TransactionState,
   PrimaryKeyDetail,
-  ForeignKeyDetail,
-  IncomingReferenceDetail,
+  ConstraintDetail,
+  SearchColumnsRequest,
+  SqlColumnSuggestion,
 } from "@gavadb/types";
 import { normalizeOracleError } from "./error-normalizer";
 import { buildOracleBinds, inferBindMetadata } from "./bind-inference";
@@ -33,6 +34,7 @@ import {
   getViewColumnsSql,
   getViewTextSql,
   getPackageSourceSql,
+  getCheckConstraintSql,
   SEARCHABLE_OBJECT_KINDS,
   oracleObjectKindToDatabaseType,
 } from "./queries";
@@ -67,6 +69,7 @@ export interface DatabaseRepository {
   getTransactionState(): TransactionState;
   listObjects(type: DatabaseObjectType): Promise<DatabaseObjectSummary[]>;
   searchObjects(prefix: string, limit?: number): Promise<DatabaseObjectSuggestion[]>;
+  searchColumns(request: SearchColumnsRequest): Promise<SqlColumnSuggestion[]>;
   getObjectDetail(type: DatabaseObjectType, name: string): Promise<ObjectDetailResponse>;
   getConnectionInfo(): ConnectionConfig | null;
 }
@@ -90,6 +93,8 @@ export class OracleRepository implements DatabaseRepository {
   private pendingTransaction = false;
 
   constructor(options?: OracleRepositoryOptions) {
+    configureOracleFetchTypes();
+
     if (options?.configDir) {
       process.env.TNS_ADMIN = options.configDir;
       console.log(`[Oracle] TNS_ADMIN set to ${options.configDir}`);
@@ -344,7 +349,7 @@ export class OracleRepository implements DatabaseRepository {
     }));
 
     // Stream only the rows we need (pageSize + 1 to detect hasMore)
-    const fetchedRows = await rs.getRows(pageSize + 1) as QueryResultRow[];
+    const fetchedRows = sanitizeQueryRows(await rs.getRows(pageSize + 1) as QueryResultRow[]);
     await rs.close();
 
     const hasMore = fetchedRows.length > pageSize;
@@ -427,16 +432,36 @@ export class OracleRepository implements DatabaseRepository {
     try {
       const result = await conn.execute(
         `
-          SELECT
-            owner AS schema,
-            object_name AS name,
-            object_type,
-            status
-          FROM all_objects
-          WHERE object_type IN (${SEARCHABLE_OBJECT_KINDS.map((kind) => `'${kind}'`).join(", ")})
-            AND object_name LIKE :namePrefix ESCAPE '\\'
-            AND (:schemaName IS NULL OR owner = :schemaName)
-            AND (:schemaName IS NOT NULL OR owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'))
+          SELECT *
+          FROM (
+            SELECT
+              owner AS schema,
+              object_name AS name,
+              object_type,
+              status
+            FROM all_objects
+            WHERE object_type IN (${SEARCHABLE_OBJECT_KINDS.filter((kind) => kind !== "CKT" && kind !== "CKC").map((kind) => `'${kind}'`).join(", ")})
+              AND object_name LIKE :namePrefix ESCAPE '\\'
+              AND (:schemaName IS NULL OR owner = :schemaName)
+              AND (:schemaName IS NOT NULL OR owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'))
+
+            UNION ALL
+
+            SELECT
+              owner AS schema,
+              constraint_name AS name,
+              CASE
+                WHEN constraint_name LIKE 'CKT%' THEN 'CKT'
+                ELSE 'CKC'
+              END AS object_type,
+              CASE status WHEN 'ENABLED' THEN 'VALID' ELSE 'INVALID' END AS status
+            FROM all_constraints
+            WHERE constraint_type = 'C'
+              AND constraint_name LIKE :namePrefix ESCAPE '\\'
+              AND REGEXP_LIKE(constraint_name, '^(CKT|CKC)')
+              AND (:schemaName IS NULL OR owner = :schemaName)
+              AND (:schemaName IS NOT NULL OR owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'))
+          )
           ORDER BY
             CASE object_type
               WHEN 'TABLE' THEN 1
@@ -445,9 +470,11 @@ export class OracleRepository implements DatabaseRepository {
               WHEN 'PROCEDURE' THEN 4
               WHEN 'FUNCTION' THEN 5
               WHEN 'TRIGGER' THEN 6
+              WHEN 'CKT' THEN 7
+              WHEN 'CKC' THEN 8
               ELSE 99
             END,
-            object_name
+            name
           FETCH FIRST ${clampObjectSearchLimit(limit)} ROWS ONLY
         `,
         {
@@ -460,7 +487,7 @@ export class OracleRepository implements DatabaseRepository {
       const rows = (result.rows ?? []) as Array<{
         SCHEMA: string;
         NAME: string;
-        OBJECT_TYPE: "TABLE" | "VIEW" | "TRIGGER" | "PACKAGE" | "PROCEDURE" | "FUNCTION";
+        OBJECT_TYPE: "TABLE" | "VIEW" | "TRIGGER" | "PACKAGE" | "PROCEDURE" | "FUNCTION" | "CKT" | "CKC";
         STATUS: "VALID" | "INVALID";
       }>;
 
@@ -476,12 +503,73 @@ export class OracleRepository implements DatabaseRepository {
     }
   }
 
+  async searchColumns(request: SearchColumnsRequest): Promise<SqlColumnSuggestion[]> {
+    const conn = this.requireConnection();
+    if (request.tables.length === 0) return [];
+
+    const uniqueTables = dedupeAutocompleteTables(request.tables);
+    const whereClauses: string[] = [];
+    const binds: Record<string, string> = {};
+
+    uniqueTables.forEach((tableRef, index) => {
+      const tableKey = `table_${index}`;
+      binds[tableKey] = tableRef.table.toUpperCase();
+      if (tableRef.schema) {
+        const schemaKey = `schema_${index}`;
+        binds[schemaKey] = tableRef.schema.toUpperCase();
+        whereClauses.push(`(OWNER = :${schemaKey} AND TABLE_NAME = :${tableKey})`);
+      } else {
+        whereClauses.push(`(TABLE_NAME = :${tableKey} AND OWNER = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'))`);
+      }
+    });
+
+    const prefix = request.prefix?.trim().toUpperCase() ?? "";
+    if (prefix) {
+      binds.prefix = `${escapeLike(prefix)}%`;
+    }
+
+    const result = await conn.execute(
+      `
+        SELECT
+          OWNER AS schema,
+          TABLE_NAME,
+          COLUMN_NAME,
+          DATA_TYPE,
+          COLUMN_ID
+        FROM ALL_TAB_COLUMNS
+        WHERE (${whereClauses.join(" OR ")})
+          ${prefix ? "AND COLUMN_NAME LIKE :prefix ESCAPE '\\'" : ""}
+        ORDER BY TABLE_NAME, COLUMN_ID
+        FETCH FIRST ${clampColumnSearchLimit(request.limit)} ROWS ONLY
+      `,
+      binds,
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+
+    const aliasByTable = new Map(uniqueTables.map((table) => [autocompleteTableKey(table), table.alias ?? null]));
+    const rows = (result.rows ?? []) as Array<{
+      SCHEMA: string;
+      TABLE_NAME: string;
+      COLUMN_NAME: string;
+      DATA_TYPE: string;
+    }>;
+
+    return rows.map((row) => ({
+      name: row.COLUMN_NAME,
+      table: row.TABLE_NAME,
+      schema: row.SCHEMA,
+      alias: aliasByTable.get(autocompleteTableKey({ schema: row.SCHEMA, table: row.TABLE_NAME })) ?? null,
+      dataType: row.DATA_TYPE,
+    }));
+  }
+
   async getObjectDetail(type: DatabaseObjectType, name: string): Promise<ObjectDetailResponse> {
     const conn = this.requireConnection();
 
     try {
       if (type === "tables") return await this.fetchTableDetail(conn, name);
       if (type === "views") return await this.fetchViewDetail(conn, name);
+      if (type === "ckts" || type === "ckcs") return await this.fetchCheckConstraintDetail(conn, type, name);
 
       let source: string;
       if (type === "packages") {
@@ -510,11 +598,9 @@ export class OracleRepository implements DatabaseRepository {
   }
 
   private async fetchTableDetail(conn: Connection, name: string): Promise<ObjectDetailResponse> {
-    const [columnResult, primaryKey, foreignKeys, referencedBy] = await Promise.all([
+    const [columnResult, primaryKey] = await Promise.all([
       conn.execute(getTableColumnsSql(name), {}, { outFormat: oracledb.OUT_FORMAT_OBJECT }),
       this.getTablePrimaryKey(conn, name),
-      this.getOutgoingForeignKeys(conn, name),
-      this.getIncomingForeignKeys(conn, name),
     ]);
     const rows = (columnResult.rows ?? []) as Array<{
       COLUMN_NAME: string; DATA_TYPE: string; DATA_LENGTH: number;
@@ -529,7 +615,7 @@ export class OracleRepository implements DatabaseRepository {
       position: r.COLUMN_ID,
     }));
 
-    return { kind: "table", objectName: name, columns, primaryKey, foreignKeys, referencedBy };
+    return { kind: "table", objectName: name, columns, primaryKey };
   }
 
   private async fetchViewDetail(conn: Connection, name: string): Promise<ObjectDetailResponse> {
@@ -589,6 +675,48 @@ export class OracleRepository implements DatabaseRepository {
     if (rows.length === 0) return `-- No source found for ${type.slice(0, -1)} ${name}`;
 
     return `CREATE OR REPLACE ${rows.map((r) => r.TEXT).join("")}`;
+  }
+
+  private async fetchCheckConstraintDetail(
+    conn: Connection,
+    type: "ckts" | "ckcs",
+    name: string,
+  ): Promise<ConstraintDetail> {
+    const result = await conn.execute(
+      getCheckConstraintSql(name),
+      {},
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const rows = (result.rows ?? []) as Array<{
+      CONSTRAINT_NAME: string;
+      TABLE_NAME: string;
+      STATUS: "ENABLED" | "DISABLED";
+      VALIDATED: "VALIDATED" | "NOT VALIDATED";
+      SEARCH_CONDITION_VC: string | null;
+      COLUMN_NAME: string | null;
+      POSITION: number | null;
+    }>;
+
+    if (rows.length === 0) {
+      throw new Error(`Constraint ${name} not found`);
+    }
+
+    const first = rows[0];
+    return {
+      kind: "constraint",
+      objectName: first.CONSTRAINT_NAME,
+      objectType: type,
+      tableName: first.TABLE_NAME,
+      searchCondition: first.SEARCH_CONDITION_VC ?? "-- No check condition available",
+      columns: rows
+        .filter((row) => row.COLUMN_NAME && row.POSITION != null)
+        .map((row) => ({
+          name: row.COLUMN_NAME!,
+          position: row.POSITION!,
+        })),
+      status: first.STATUS,
+      validated: first.VALIDATED,
+    };
   }
 
   private async resolveEditableQueryInfo(
@@ -683,90 +811,6 @@ export class OracleRepository implements DatabaseRepository {
     };
   }
 
-  private async getOutgoingForeignKeys(conn: Connection, tableName: string): Promise<ForeignKeyDetail[]> {
-    const result = await conn.execute(
-      `
-        SELECT
-          child.constraint_name,
-          child_cols.position,
-          child_cols.column_name AS local_column,
-          parent.owner AS referenced_schema,
-          parent.table_name AS referenced_table,
-          parent_cols.column_name AS referenced_column
-        FROM all_constraints child
-        JOIN all_cons_columns child_cols
-          ON child_cols.owner = child.owner
-         AND child_cols.constraint_name = child.constraint_name
-        JOIN all_constraints parent
-          ON parent.owner = child.r_owner
-         AND parent.constraint_name = child.r_constraint_name
-        JOIN all_cons_columns parent_cols
-          ON parent_cols.owner = parent.owner
-         AND parent_cols.constraint_name = parent.constraint_name
-         AND parent_cols.position = child_cols.position
-        WHERE child.constraint_type = 'R'
-          AND child.owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
-          AND child.table_name = :tableName
-        ORDER BY child.constraint_name, child_cols.position
-      `,
-      { tableName: tableName.toUpperCase() },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-
-    const rows = (result.rows ?? []) as Array<{
-      CONSTRAINT_NAME: string;
-      POSITION: number;
-      LOCAL_COLUMN: string;
-      REFERENCED_SCHEMA: string;
-      REFERENCED_TABLE: string;
-      REFERENCED_COLUMN: string;
-    }>;
-
-    return groupOutgoingForeignKeyRows(rows);
-  }
-
-  private async getIncomingForeignKeys(conn: Connection, tableName: string): Promise<IncomingReferenceDetail[]> {
-    const result = await conn.execute(
-      `
-        SELECT
-          child.constraint_name,
-          child.owner AS source_schema,
-          child.table_name AS source_table,
-          child_cols.position,
-          child_cols.column_name AS local_column,
-          parent_cols.column_name AS referenced_column
-        FROM all_constraints parent
-        JOIN all_cons_columns parent_cols
-          ON parent_cols.owner = parent.owner
-         AND parent_cols.constraint_name = parent.constraint_name
-        JOIN all_constraints child
-          ON child.r_owner = parent.owner
-         AND child.r_constraint_name = parent.constraint_name
-         AND child.constraint_type = 'R'
-        JOIN all_cons_columns child_cols
-          ON child_cols.owner = child.owner
-         AND child_cols.constraint_name = child.constraint_name
-         AND child_cols.position = parent_cols.position
-        WHERE parent.constraint_type IN ('P', 'U')
-          AND parent.owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
-          AND parent.table_name = :tableName
-        ORDER BY child.table_name, child.constraint_name, child_cols.position
-      `,
-      { tableName: tableName.toUpperCase() },
-      { outFormat: oracledb.OUT_FORMAT_OBJECT },
-    );
-
-    const rows = (result.rows ?? []) as Array<{
-      CONSTRAINT_NAME: string;
-      SOURCE_SCHEMA: string;
-      SOURCE_TABLE: string;
-      POSITION: number;
-      LOCAL_COLUMN: string;
-      REFERENCED_COLUMN: string;
-    }>;
-
-    return groupIncomingForeignKeyRows(rows);
-  }
 
   private async updateSingleRow(conn: Connection, change: UpdateRowRequest): Promise<number> {
     const tableName = sanitizeIdentifier(change.tableName);
@@ -988,6 +1032,11 @@ function clampObjectSearchLimit(limit?: number): number {
   return Math.max(1, Math.min(Math.floor(limit), 50));
 }
 
+function clampColumnSearchLimit(limit?: number): number {
+  if (!limit || !Number.isFinite(limit)) return 50;
+  return Math.max(1, Math.min(Math.floor(limit), 100));
+}
+
 function parseObjectSearchPrefix(prefix: string): { schema: string | null; objectPrefix: string } {
   const trimmed = prefix.trim().replace(/^"+|"+$/g, "");
   if (!trimmed) return { schema: null, objectPrefix: "" };
@@ -1016,82 +1065,22 @@ function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (char) => `\\${char}`);
 }
 
-function groupOutgoingForeignKeyRows(rows: Array<{
-  CONSTRAINT_NAME: string;
-  POSITION: number;
-  LOCAL_COLUMN: string;
-  REFERENCED_SCHEMA: string;
-  REFERENCED_TABLE: string;
-  REFERENCED_COLUMN: string;
-}>): ForeignKeyDetail[] {
-  const grouped = new Map<string, ForeignKeyDetail>();
+function dedupeAutocompleteTables(tables: SearchColumnsRequest["tables"]): SearchColumnsRequest["tables"] {
+  const seen = new Set<string>();
+  const unique: SearchColumnsRequest["tables"] = [];
 
-  for (const row of rows) {
-    const current = grouped.get(row.CONSTRAINT_NAME);
-    if (!current) {
-      grouped.set(row.CONSTRAINT_NAME, {
-        constraintName: row.CONSTRAINT_NAME,
-        referencedSchema: row.REFERENCED_SCHEMA,
-        referencedTable: row.REFERENCED_TABLE,
-        columns: [{
-          position: row.POSITION,
-          localColumn: row.LOCAL_COLUMN,
-          referencedColumn: row.REFERENCED_COLUMN,
-        }],
-      });
-      continue;
-    }
-
-    current.columns.push({
-      position: row.POSITION,
-      localColumn: row.LOCAL_COLUMN,
-      referencedColumn: row.REFERENCED_COLUMN,
-    });
+  for (const table of tables) {
+    const key = autocompleteTableKey(table);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(table);
   }
 
-  return Array.from(grouped.values()).map((entry) => ({
-    ...entry,
-    columns: [...entry.columns].sort((a, b) => a.position - b.position),
-  }));
+  return unique;
 }
 
-function groupIncomingForeignKeyRows(rows: Array<{
-  CONSTRAINT_NAME: string;
-  POSITION: number;
-  LOCAL_COLUMN: string;
-  SOURCE_SCHEMA: string;
-  SOURCE_TABLE: string;
-  REFERENCED_COLUMN: string;
-}>): IncomingReferenceDetail[] {
-  const grouped = new Map<string, IncomingReferenceDetail>();
-
-  for (const row of rows) {
-    const current = grouped.get(row.CONSTRAINT_NAME);
-    if (!current) {
-      grouped.set(row.CONSTRAINT_NAME, {
-        constraintName: row.CONSTRAINT_NAME,
-        sourceSchema: row.SOURCE_SCHEMA,
-        sourceTable: row.SOURCE_TABLE,
-        columns: [{
-          position: row.POSITION,
-          localColumn: row.LOCAL_COLUMN,
-          referencedColumn: row.REFERENCED_COLUMN,
-        }],
-      });
-      continue;
-    }
-
-    current.columns.push({
-      position: row.POSITION,
-      localColumn: row.LOCAL_COLUMN,
-      referencedColumn: row.REFERENCED_COLUMN,
-    });
-  }
-
-  return Array.from(grouped.values()).map((entry) => ({
-    ...entry,
-    columns: [...entry.columns].sort((a, b) => a.position - b.position),
-  }));
+function autocompleteTableKey(table: { schema?: string | null; table: string }): string {
+  return `${table.schema?.toUpperCase() ?? ""}.${table.table.toUpperCase()}`;
 }
 
 /**
@@ -1139,4 +1128,90 @@ function hasOciDll(dir: string): boolean {
   } catch {
     return false;
   }
+}
+
+function configureOracleFetchTypes(): void {
+  const fetchAsString = Array.from(new Set([
+    ...(oracledb.fetchAsString ?? []),
+    oracledb.CLOB,
+    oracledb.NCLOB,
+  ]));
+  oracledb.fetchAsString = fetchAsString as typeof oracledb.fetchAsString;
+
+  const fetchAsBuffer = Array.from(new Set([
+    ...(oracledb.fetchAsBuffer ?? []),
+    oracledb.BLOB,
+  ]));
+  oracledb.fetchAsBuffer = fetchAsBuffer as typeof oracledb.fetchAsBuffer;
+}
+
+function sanitizeQueryRows(rows: QueryResultRow[]): QueryResultRow[] {
+  return rows.map((row) => sanitizeQueryRow(row));
+}
+
+function sanitizeQueryRow(row: QueryResultRow): QueryResultRow {
+  return Object.fromEntries(
+    Object.entries(row).map(([key, value]) => [key, sanitizeQueryValue(value)]),
+  );
+}
+
+function sanitizeQueryValue(value: unknown): unknown {
+  if (
+    value == null
+    || typeof value === "string"
+    || typeof value === "number"
+    || typeof value === "boolean"
+    || typeof value === "bigint"
+  ) {
+    return value;
+  }
+
+  if (
+    value instanceof Date
+    || value instanceof ArrayBuffer
+    || ArrayBuffer.isView(value)
+  ) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeQueryValue(item));
+  }
+
+  if (typeof value === "object") {
+    if (isPlainObject(value)) {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, entryValue]) => [key, sanitizeQueryValue(entryValue)]),
+      );
+    }
+
+    return stringifyDriverValue(value);
+  }
+
+  return String(value);
+}
+
+function isPlainObject(value: object): boolean {
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function stringifyDriverValue(value: object): string {
+  const constructorName = value.constructor?.name?.trim();
+
+  if (constructorName === "Lob") {
+    const dbTypeName = "dbTypeName" in value && typeof value.dbTypeName === "string"
+      ? value.dbTypeName
+      : "LOB";
+    return `[${dbTypeName}]`;
+  }
+
+  const text = typeof (value as { toString?: () => string }).toString === "function"
+    ? value.toString()
+    : "";
+  if (text && text !== "[object Object]") {
+    return text;
+  }
+
+  return constructorName ? `[${constructorName}]` : "[Object]";
 }

@@ -609,5 +609,4 @@ const selectedCellStyle: React.CSSProperties = { outline: "2px solid var(--focus
 const editingCellStyle: React.CSSProperties = { outline: "2px solid var(--focus-color)", outlineOffset: -2, background: "var(--cell-editing-bg)", padding: 2 };
 const inputStyle: React.CSSProperties = { width: "100%", height: INPUT_HEIGHT, padding: "0 6px", background: "var(--grid-bg)", border: "1px solid var(--focus-color)", borderRadius: 4, color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: "var(--font-size-sm)", outline: "none" };
 const nullCellStyle: React.CSSProperties = { color: "var(--text-muted)", fontStyle: "italic" };
-const countResultStyle: React.CSSProperties = { color: "var(--accent)", fontWeight: 600 };
 const countErrorStyle: React.CSSProperties = { color: "var(--danger)", fontSize: 11 };

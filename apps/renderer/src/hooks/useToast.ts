@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 
 export type ToastType = "success" | "error" | "info" | "warning";
 
@@ -14,22 +14,38 @@ const DEFAULT_DURATION = 4000;
 export function useToast() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const idRef = useRef(0);
+  const timersRef = useRef<number[]>([]);
+
+  const scheduleTimer = useCallback((callback: () => void, delay: number) => {
+    const id = window.setTimeout(() => {
+      timersRef.current = timersRef.current.filter((timerId) => timerId !== id);
+      callback();
+    }, delay);
+    timersRef.current.push(id);
+  }, []);
 
   const dismiss = useCallback((id: number) => {
     setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, exiting: true } : t)));
-    setTimeout(() => {
+    scheduleTimer(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 200);
-  }, []);
+  }, [scheduleTimer]);
 
   const show = useCallback((type: ToastType, message: string, duration = DEFAULT_DURATION) => {
     const id = ++idRef.current;
     setToasts((prev) => [...prev, { id, type, message }]);
     if (duration > 0) {
-      setTimeout(() => dismiss(id), duration);
+      scheduleTimer(() => dismiss(id), duration);
     }
     return id;
-  }, [dismiss]);
+  }, [dismiss, scheduleTimer]);
+
+  useEffect(() => () => {
+    for (const timerId of timersRef.current) {
+      window.clearTimeout(timerId);
+    }
+    timersRef.current = [];
+  }, []);
 
   return {
     toasts,

@@ -23,16 +23,6 @@ export function useConnection() {
     };
   }, []);
 
-  const refreshTransactionState = useCallback(async () => {
-    const result = await window.gavadb.dbGetTransactionState();
-    if (result.success) {
-      setTransactionState(result.data);
-      return result.data;
-    }
-    setError(result.error);
-    return null;
-  }, []);
-
   const connect = useCallback(async (config: ConnectionConfig) => {
     setError(null);
     const result = await window.gavadb.dbConnect(config);
@@ -115,6 +105,7 @@ export function useConnection() {
 
   const isConnected = status === "connected";
   const isConnecting = status === "connecting";
+  const clearError = useCallback(() => setError(null), []);
 
   return {
     status,
@@ -123,11 +114,10 @@ export function useConnection() {
     isConnecting,
     connect,
     disconnect,
-    clearError: () => setError(null),
+    clearError,
     lastConfig,
     connectionLabel,
     transactionState,
-    refreshTransactionState,
     commitTransaction,
     rollbackTransaction,
     loadTnsAliases,

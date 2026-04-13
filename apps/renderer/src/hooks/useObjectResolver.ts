@@ -62,6 +62,14 @@ export function useObjectResolver(isConnected: boolean) {
     const normalized = normalizeObjectName(name);
     if (!normalized) return null;
 
+    const searchResult = await window.gavadb.dbSearchObjects(normalized, 20);
+    if (searchResult.success) {
+      const exactMatch = searchResult.data.find((item) => normalizeObjectName(item.name) === normalized);
+      if (exactMatch) {
+        return { type: exactMatch.type, name: exactMatch.name };
+      }
+    }
+
     for (const type of OBJECT_TYPES) {
       const index = await loadType(type);
       const match = index.get(normalized);

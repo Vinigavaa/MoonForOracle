@@ -12,6 +12,7 @@ import type {
   CountRowsRequest,
   UpdateRowRequest,
   SaveConnectionRequest,
+  SearchColumnsRequest,
 } from "@gavadb/types";
 
 contextBridge.exposeInMainWorld("gavadb", {
@@ -59,6 +60,9 @@ contextBridge.exposeInMainWorld("gavadb", {
 
   dbSearchObjects: (prefix: string, limit?: number) =>
     ipcRenderer.invoke(IPC_CHANNELS.DB_SEARCH_OBJECTS, prefix, limit),
+
+  dbSearchColumns: (request: SearchColumnsRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.DB_SEARCH_COLUMNS, request),
 
   connListSaved: () =>
     ipcRenderer.invoke(IPC_CHANNELS.CONN_LIST_SAVED),

@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import type { ConnectionStatus } from "@gavadb/types";
+import { Bolt } from "lucide-react";
 
 interface ToolbarProps {
   status: ConnectionStatus;
@@ -13,6 +14,7 @@ interface ToolbarProps {
   onExecuteAllSql: () => void;
   isConnected: boolean;
   transactionBusy?: boolean;
+  onOpenPreferences: () => void;
 }
 
 const STATUS_LABELS: Record<ConnectionStatus, string> = {
@@ -41,6 +43,7 @@ export function Toolbar({
   onExecuteAllSql,
   isConnected,
   transactionBusy,
+  onOpenPreferences,
 }: ToolbarProps) {
   const [isMaximized, setIsMaximized] = useState(true);
 
@@ -103,7 +106,7 @@ export function Toolbar({
           <span style={{
             fontSize: "var(--font-size-sm)",
             color: "var(--text-muted)",
-            fontFamily: "var(--font-mono)",
+            fontFamily: "var(--font-ui)",
           }}>
             — {connectionLabel}
           </span>
@@ -187,6 +190,16 @@ export function Toolbar({
         Execute All
       </button>
 
+      <button
+        className="app-no-drag"
+        onClick={onOpenPreferences}
+        aria-label="Preferências"
+        title="Preferências"
+        style={preferencesButtonStyle}
+      >
+        <Bolt size={14} strokeWidth={1.9} aria-hidden="true" />
+      </button>
+
       <div className="app-window-controls app-no-drag" aria-label="Window controls">
         <button type="button" onClick={handleMinimize} aria-label="Minimize window" title="Minimize">
           _
@@ -206,3 +219,17 @@ export function Toolbar({
     </div>
   );
 }
+
+const preferencesButtonStyle: CSSProperties = {
+  width: 30,
+  minWidth: 30,
+  height: 30,
+  padding: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  border: "1px solid var(--border-color)",
+  background: "transparent",
+  color: "var(--text-secondary)",
+};
+

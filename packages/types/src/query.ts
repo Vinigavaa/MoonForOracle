@@ -83,6 +83,26 @@ export interface InferBindsRequest {
   sql: string;
 }
 
+export interface SqlAutocompleteTableRef {
+  schema?: string | null;
+  table: string;
+  alias?: string | null;
+}
+
+export interface SearchColumnsRequest {
+  tables: SqlAutocompleteTableRef[];
+  prefix?: string;
+  limit?: number;
+}
+
+export interface SqlColumnSuggestion {
+  name: string;
+  table: string;
+  schema: string;
+  alias?: string | null;
+  dataType: string;
+}
+
 /** Request para execução de SQL via IPC */
 export interface SqlExecutionRequest {
   sql: string;

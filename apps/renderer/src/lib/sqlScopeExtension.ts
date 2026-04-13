@@ -2,7 +2,6 @@ import { Facet, RangeSet, RangeSetBuilder } from "@codemirror/state";
 import { EditorView, GutterMarker, ViewPlugin, gutter, type ViewUpdate } from "@codemirror/view";
 import { findNearestSqlScope, findSqlScopeAtCursor, getSqlScopePath, parseSqlScopeBlocks, type SqlScopeBlock } from "@gavadb/utils";
 
-const SQL_SCOPE_PARSE_DELAY_MS = 160;
 const GUIDE_SLOT_WIDTH = 7;
 const GUIDE_PADDING = 6;
 
@@ -124,72 +123,21 @@ function buildScopeMarkers(view: EditorView, blocks: SqlScopeBlock[]) {
 
 const sqlScopeViewPlugin = ViewPlugin.fromClass(class {
   markers: RangeSet<GutterMarker>;
-  private timeoutId: number | null = null;
-  private parseRevision = 0;
   private parsedBlocks: SqlScopeBlock[];
-  private parsedDoc: string;
 
   constructor(private readonly view: EditorView) {
-    this.parsedDoc = view.state.doc.toString();
-    this.parsedBlocks = parseSqlScopeBlocks(this.parsedDoc);
+    this.parsedBlocks = parseSqlScopeBlocks(view.state.doc.toString());
     this.markers = buildScopeMarkers(view, this.parsedBlocks);
   }
 
   update(update: ViewUpdate) {
     if (update.docChanged) {
-      this.parseRevision += 1;
-      const revision = this.parseRevision;
       const nextDoc = update.state.doc.toString();
-      console.debug("[SqlScope] content changed", {
-        revision,
-        length: nextDoc.length,
-        changes: update.transactions.length,
-      });
-
-      if (this.timeoutId != null) {
-        window.clearTimeout(this.timeoutId);
-        this.timeoutId = null;
-      }
-
-      if (nextDoc.length === 0) {
-        console.debug("[SqlScope] document cleared");
-        this.parsedDoc = "";
-        this.parsedBlocks = [];
-      } else {
-        console.debug("[SqlScope] parser run", { revision, length: nextDoc.length, mode: "immediate" });
-        this.parsedDoc = nextDoc;
-        this.parsedBlocks = parseSqlScopeBlocks(nextDoc);
-
-        this.timeoutId = window.setTimeout(() => {
-          this.timeoutId = null;
-          if (revision !== this.parseRevision) return;
-          const currentDoc = this.view.state.doc.toString();
-          console.debug("[SqlScope] parser run", { revision, length: currentDoc.length, mode: "debounced" });
-          this.parsedDoc = currentDoc;
-          this.parsedBlocks = parseSqlScopeBlocks(currentDoc);
-          this.markers = buildScopeMarkers(this.view, this.parsedBlocks);
-          console.debug("[SqlScope] markers rendered", { size: this.markers.size, mode: "debounced" });
-          this.view.requestMeasure();
-        }, SQL_SCOPE_PARSE_DELAY_MS);
-      }
-    }
-
-    if (this.parsedDoc !== update.state.doc.toString()) {
-      this.parsedDoc = update.state.doc.toString();
-      this.parsedBlocks = parseSqlScopeBlocks(this.parsedDoc);
-      console.debug("[SqlScope] parser run", { revision: this.parseRevision, length: this.parsedDoc.length, mode: "resync" });
+      this.parsedBlocks = nextDoc.length === 0 ? [] : parseSqlScopeBlocks(nextDoc);
     }
 
     if (update.docChanged || update.selectionSet || update.viewportChanged) {
       this.markers = buildScopeMarkers(update.view, this.parsedBlocks);
-      console.debug("[SqlScope] markers rendered", { size: this.markers.size, mode: update.docChanged ? "docChanged" : update.selectionSet ? "selection" : "viewport" });
-    }
-  }
-
-  destroy() {
-    if (this.timeoutId != null) {
-      window.clearTimeout(this.timeoutId);
-      this.timeoutId = null;
     }
   }
 });

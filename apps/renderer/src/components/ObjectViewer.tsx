@@ -3,8 +3,6 @@ import type {
   ObjectDetailResponse,
   ColumnInfo,
   PrimaryKeyDetail,
-  ForeignKeyDetail,
-  IncomingReferenceDetail,
 } from "@gavadb/types";
 import { useObjectDetail } from "../hooks/useObjectDetail";
 import { SqlCodeEditor } from "./SqlCodeEditor";
@@ -21,6 +19,8 @@ const TYPE_LABELS: Record<DatabaseObjectType, string> = {
   packages: "Package",
   procedures: "Procedure",
   functions: "Function",
+  ckts: "CKT",
+  ckcs: "CKC",
 };
 
 const TYPE_COLORS: Record<DatabaseObjectType, string> = {
@@ -30,6 +30,8 @@ const TYPE_COLORS: Record<DatabaseObjectType, string> = {
   packages: "var(--info)",
   procedures: "var(--text-secondary)",
   functions: "var(--danger)",
+  ckts: "var(--warning)",
+  ckcs: "var(--info)",
 };
 
 export function ObjectViewer({ objectType, objectName }: ObjectViewerProps) {
@@ -71,7 +73,7 @@ export function ObjectViewer({ objectType, objectName }: ObjectViewerProps) {
           }}>
             {displayLabel}
           </span>
-          <span style={{ fontWeight: 600, fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-primary)" }}>
+          <span style={{ fontWeight: 600, fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--text-primary)" }}>
             {objectName}
           </span>
         </div>
@@ -100,6 +102,7 @@ export function ObjectViewer({ objectType, objectName }: ObjectViewerProps) {
           <>
             {detail.kind === "table" && <TableView detail={detail} />}
             {detail.kind === "view" && <ViewView detail={detail} />}
+            {detail.kind === "constraint" && <ConstraintView detail={detail} />}
             {detail.kind === "source" && <SourceView source={detail.source} />}
           </>
         )}
@@ -139,16 +142,6 @@ function TableView({ detail }: { detail: Extract<ObjectDetailResponse, { kind: "
       <section>
         <SectionHeader title="Primary Key" />
         <PrimaryKeySection primaryKey={detail.primaryKey} />
-      </section>
-
-      <section>
-        <SectionHeader title="Foreign Keys" subtitle="Outgoing references" />
-        <ForeignKeysSection foreignKeys={detail.foreignKeys} />
-      </section>
-
-      <section>
-        <SectionHeader title="Used By" subtitle="Incoming references" />
-        <IncomingReferencesSection references={detail.referencedBy} />
       </section>
     </div>
   );
@@ -198,7 +191,7 @@ function ColumnTable({ columns }: { columns: ColumnInfo[] }) {
     <table style={{
       width: "100%",
       borderCollapse: "collapse",
-      fontFamily: "var(--font-mono)",
+      fontFamily: "var(--font-ui)",
       fontSize: "var(--font-size-sm)",
     }}>
       <thead>
@@ -265,44 +258,28 @@ function PrimaryKeySection({ primaryKey }: { primaryKey: PrimaryKeyDetail | null
   );
 }
 
-function ForeignKeysSection({ foreignKeys }: { foreignKeys: ForeignKeyDetail[] }) {
-  if (foreignKeys.length === 0) {
-    return <EmptySection message="No foreign keys defined" />;
-  }
+function ConstraintView({ detail }: { detail: Extract<ObjectDetailResponse, { kind: "constraint" }> }) {
+  const columnsLabel = detail.columns.length > 0
+    ? detail.columns.map((column: { position: number; name: string }) => `${column.position}. ${column.name}`).join(", ")
+    : "No column mapping available";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {foreignKeys.map((foreignKey) => (
-        <div key={foreignKey.constraintName} style={sectionCardStyle}>
-          <MetadataLine label="Constraint" value={foreignKey.constraintName} />
-          <MetadataLine label="References" value={`${foreignKey.referencedSchema}.${foreignKey.referencedTable}`} />
-          <MetadataLine
-            label="Columns"
-            value={foreignKey.columns.map((column) => `${column.position}. ${column.localColumn} -> ${column.referencedColumn}`).join(", ")}
-          />
+    <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 16 }}>
+      <section>
+        <SectionHeader title="Constraint Details" subtitle={TYPE_LABELS[detail.objectType]} />
+        <div style={sectionCardStyle}>
+          <MetadataLine label="Constraint" value={detail.objectName} />
+          <MetadataLine label="Table" value={detail.tableName} />
+          <MetadataLine label="Status" value={detail.status} />
+          <MetadataLine label="Validated" value={detail.validated} />
+          <MetadataLine label="Columns" value={columnsLabel} />
         </div>
-      ))}
-    </div>
-  );
-}
+      </section>
 
-function IncomingReferencesSection({ references }: { references: IncomingReferenceDetail[] }) {
-  if (references.length === 0) {
-    return <EmptySection message="This table is not referenced by other tables" />;
-  }
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {references.map((reference) => (
-        <div key={`${reference.sourceSchema}.${reference.sourceTable}.${reference.constraintName}`} style={sectionCardStyle}>
-          <MetadataLine label="Child Table" value={`${reference.sourceSchema}.${reference.sourceTable}`} />
-          <MetadataLine label="Constraint" value={reference.constraintName} />
-          <MetadataLine
-            label="Columns"
-            value={reference.columns.map((column) => `${column.position}. ${column.localColumn} -> ${column.referencedColumn}`).join(", ")}
-          />
-        </div>
-      ))}
+      <section>
+        <SectionHeader title="Check Condition" />
+        <pre style={constraintConditionStyle}>{detail.searchCondition}</pre>
+      </section>
     </div>
   );
 }
@@ -311,7 +288,7 @@ function MetadataLine({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "110px minmax(0, 1fr)", gap: 10, alignItems: "start" }}>
       <span style={{ color: "var(--text-muted)", fontSize: 11 }}>{label}</span>
-      <span style={{ color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.5, wordBreak: "break-word" }}>
+      <span style={{ color: "var(--text-primary)", fontFamily: "var(--font-ui)", fontSize: 12, lineHeight: 1.5, wordBreak: "break-word" }}>
         {value}
       </span>
     </div>
@@ -397,4 +374,17 @@ const sectionCardStyle: React.CSSProperties = {
   padding: "10px 12px",
   border: "1px solid var(--border-subtle)",
   background: "var(--panel-bg)",
+};
+
+const constraintConditionStyle: React.CSSProperties = {
+  margin: 0,
+  padding: "10px 12px",
+  border: "1px solid var(--border-subtle)",
+  background: "var(--panel-bg)",
+  color: "var(--text-primary)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 12,
+  lineHeight: 1.6,
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-word",
 };

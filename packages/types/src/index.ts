@@ -6,13 +6,11 @@ export type {
   DatabaseObjectSuggestion,
   ColumnInfo,
   ConstraintColumnInfo,
-  ForeignKeyColumnMapping,
   PrimaryKeyDetail,
-  ForeignKeyDetail,
-  IncomingReferenceDetail,
   TableDetail,
   ViewDetail,
   SourceDetail,
+  ConstraintDetail,
   ObjectDetailResponse,
 } from "./database";
 export type {
@@ -31,6 +29,9 @@ export type {
   BindParameterValue,
   BindMetadata,
   InferBindsRequest,
+  SqlAutocompleteTableRef,
+  SearchColumnsRequest,
+  SqlColumnSuggestion,
 } from "./query";
 export type { AppError, AppErrorCode } from "./error";
 export type { IpcResult } from "./ipc-result";

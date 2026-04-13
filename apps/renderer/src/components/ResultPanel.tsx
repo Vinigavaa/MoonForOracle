@@ -59,7 +59,7 @@ export const ResultPanel = memo(function ResultPanel({
           border: "1px solid var(--danger)",
           borderRadius: "var(--radius)",
           fontSize: "var(--font-size-sm)",
-          fontFamily: "var(--font-mono)",
+          fontFamily: "var(--font-ui)",
           color: "var(--danger)",
           whiteSpace: "pre-wrap",
           lineHeight: 1.6,

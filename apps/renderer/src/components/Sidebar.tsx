@@ -707,7 +707,7 @@ function SectionContent({ type, state, filtered, filter, onReload, onObjectSelec
             color: "var(--text-secondary)",
             fontSize: "var(--font-size-sm)",
             textAlign: "left",
-            fontFamily: "var(--font-mono)",
+            fontFamily: "var(--font-ui)",
           }}
         >
           <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

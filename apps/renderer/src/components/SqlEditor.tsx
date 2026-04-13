@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { SqlExecutionResponse, QueryResultRow, UpdateRowRequest, BindMetadata, BindParameterValue } from "@gavadb/types";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import type { SqlExecutionResponse, QueryResultRow, UpdateRowRequest, BindMetadata, BindParameterValue, SearchColumnsRequest } from "@gavadb/types";
 import type { DatabaseObjectType } from "@gavadb/types";
 import { generateId, extractBindParameters } from "@gavadb/utils";
 import { BindParametersModal } from "./BindParametersModal";
@@ -75,10 +75,17 @@ interface SqlEditorProps {
   onOpenObject: (type: DatabaseObjectType, name: string) => void;
 }
 
+export interface SqlEditorHandle {
+  focus: () => void;
+}
+
 const MIN_EDITOR_HEIGHT = 80;
 const MIN_RESULT_HEIGHT = 60;
 
-export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef, onOpenObject }: SqlEditorProps) {
+export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(function SqlEditor(
+  { isConnected, executeTriggerRef, executeAllTriggerRef, onOpenObject },
+  ref,
+) {
   // ─── Separate editor state from result state ─────────────────────
   const [editorTabs, setEditorTabs] = useState<TabEditorState[]>(() => {
     const first = createEditorState();
@@ -129,8 +136,11 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
     });
   }, []);
 
+  useImperativeHandle(ref, () => ({
+    focus: focusEditor,
+  }), [focusEditor]);
+
   const recoverUiState = useCallback((tabId: string, reason: string, restoreFocus = false) => {
-    console.debug("[SqlEditor] Recovering UI state", { tabId, reason });
     setResultTabs((prev) => {
       const current = prev[tabId] ?? createResultState();
       if (!current.executing && !current.loadingMore && !current.mutating && !current.sorting) return prev;
@@ -549,15 +559,8 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
     const sql = activeResultTab.executedSql?.trim();
     if (!sql) return { error: "No query to count" };
     const binds = activeResultTab.executedBinds ?? undefined;
-    console.debug("[SqlEditor] countRows", {
-      tabId: activeTabId,
-      sql: sql.slice(0, 120),
-      bindNames: binds ? Object.keys(binds) : [],
-      bindValues: binds,
-    });
     const result = await countRows(sql, binds);
     if (result.data) {
-      console.debug("[SqlEditor] countRows result", { total: result.data.totalRows });
       return { totalRows: result.data.totalRows };
     }
     return { error: result.error ?? "Failed to count rows" };
@@ -582,6 +585,17 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
     if (!isConnected) return [];
 
     const result = await window.gavadb.dbSearchObjects(prefix, limit);
+    if (!result.success) {
+      throw new Error(result.error.message);
+    }
+
+    return result.data;
+  }, [isConnected]);
+
+  const handleSearchColumns = useCallback(async (request: SearchColumnsRequest) => {
+    if (!isConnected) return [];
+
+    const result = await window.gavadb.dbSearchColumns(request);
     if (!result.success) {
       throw new Error(result.error.message);
     }
@@ -736,24 +750,6 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
           color: "var(--text-muted)",
           background: "var(--panel-bg)",
           borderBottom: "1px solid var(--border-subtle)",
-          display: "flex",
-          justifyContent: "space-between",
-          flexShrink: 0,
-        }}>
-          <span>SQL Editor</span>
-          <span>
-            {isConnected
-              ? `${navigator.platform.includes("Mac") ? "\u2318" : "Ctrl"}+Enter to execute, Shift+${navigator.platform.includes("Mac") ? "\u2318" : "Ctrl"}+Enter to execute all`
-              : "Not connected"
-            }
-          </span>
-        </div>
-        <div style={{
-          padding: "3px 12px",
-          fontSize: 11,
-          color: "var(--text-muted)",
-          background: "var(--panel-bg)",
-          borderBottom: "1px solid var(--border-subtle)",
           flexShrink: 0,
           minHeight: 24,
         }}>
@@ -768,6 +764,7 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
           onExecutionContextChange={(snapshot) => updateEditorTab(activeEditorTab.id, { currentExecutionSnapshot: snapshot })}
           onOpenObject={handleOpenObject}
           onSearchObjectsByPrefix={handleSearchObjectsByPrefix}
+          onSearchColumns={handleSearchColumns}
           placeholder={isConnected
             ? "Type your SQL query here..."
             : "Connect to a database to start writing queries..."
@@ -835,7 +832,7 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
       </div>
     </div>
   );
-}
+});
 
 function renderExecutionHint(snapshot: SqlEditorExecutionSnapshot | null): string {
   if (!snapshot) return "No statement selected";

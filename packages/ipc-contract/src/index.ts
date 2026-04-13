@@ -17,6 +17,8 @@ import type {
   CountRowsResponse,
   BindMetadata,
   InferBindsRequest,
+  SearchColumnsRequest,
+  SqlColumnSuggestion,
   ObjectDetailResponse,
   UpdateRowRequest,
   AppError,
@@ -43,6 +45,7 @@ export interface IpcMainHandlers {
   "db:list-objects": (type: DatabaseObjectType) => Promise<IpcResult<DatabaseObjectSummary[]>>;
   "db:get-source": (type: DatabaseObjectType, name: string) => Promise<IpcResult<ObjectDetailResponse>>;
   "db:search-objects": (prefix: string, limit?: number) => Promise<IpcResult<DatabaseObjectSuggestion[]>>;
+  "db:search-columns": (request: SearchColumnsRequest) => Promise<IpcResult<SqlColumnSuggestion[]>>;
   "conn:list-saved": () => Promise<IpcResult<SavedConnection[]>>;
   "conn:get-with-password": (id: string) => Promise<IpcResult<SavedConnectionWithPassword>>;
   "conn:save": (request: SaveConnectionRequest) => Promise<IpcResult<SavedConnection>>;
@@ -80,6 +83,7 @@ export const IPC_CHANNELS = {
   DB_LIST_OBJECTS: "db:list-objects",
   DB_GET_SOURCE: "db:get-source",
   DB_SEARCH_OBJECTS: "db:search-objects",
+  DB_SEARCH_COLUMNS: "db:search-columns",
   DB_STATUS_CHANGED: "db:status-changed",
   DB_TRANSACTION_STATE_CHANGED: "db:transaction-state-changed",
   DB_ERROR: "db:error",
@@ -113,6 +117,7 @@ export interface GavaDbApi {
   dbListObjects: (type: DatabaseObjectType) => Promise<IpcResult<DatabaseObjectSummary[]>>;
   dbGetSource: (type: DatabaseObjectType, name: string) => Promise<IpcResult<ObjectDetailResponse>>;
   dbSearchObjects: (prefix: string, limit?: number) => Promise<IpcResult<DatabaseObjectSuggestion[]>>;
+  dbSearchColumns: (request: SearchColumnsRequest) => Promise<IpcResult<SqlColumnSuggestion[]>>;
   connListSaved: () => Promise<IpcResult<SavedConnection[]>>;
   connGetWithPassword: (id: string) => Promise<IpcResult<SavedConnectionWithPassword>>;
   connSave: (request: SaveConnectionRequest) => Promise<IpcResult<SavedConnection>>;
