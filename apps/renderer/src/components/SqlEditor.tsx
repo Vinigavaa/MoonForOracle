@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { SqlExecutionResponse, QueryResultRow, UpdateRowRequest } from "@gavadb/types";
+import type { SqlExecutionResponse, QueryResultRow, UpdateRowRequest, BindMetadata, BindParameterValue } from "@gavadb/types";
 import type { DatabaseObjectType } from "@gavadb/types";
-import { generateId } from "@gavadb/utils";
+import { generateId, extractBindParameters } from "@gavadb/utils";
+import { BindParametersModal } from "./BindParametersModal";
 import { useSqlExecution } from "../hooks/useSqlExecution";
 import { useToastContext } from "../hooks/ToastContext";
 import { useObjectResolver } from "../hooks/useObjectResolver";
@@ -34,6 +35,8 @@ interface TabResultState {
   batchResults: BatchStatementExecution[] | null;
   allRows: QueryResultRow[];
   executedSql: string | null;
+  /** Binds used in the last execution — reused by sort/loadMore/refresh */
+  executedBinds: Record<string, BindParameterValue> | null;
   error: string | null;
   executing: boolean;
   loadingMore: boolean;
@@ -56,6 +59,7 @@ function createResultState(): TabResultState {
     batchResults: null,
     allRows: [],
     executedSql: null,
+    executedBinds: null,
     error: null,
     executing: false,
     loadingMore: false,
@@ -90,7 +94,15 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
   const [splitRatio, setSplitRatio] = useState(0.4);
   const containerRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
-  const { execute: executeSql, updateRows, countRows } = useSqlExecution();
+  const { execute: executeSql, updateRows, countRows, inferBinds } = useSqlExecution();
+
+  // ─── Bind parameter modal state ─────────────────────────────────
+  const [bindModal, setBindModal] = useState<{
+    open: boolean;
+    sql: string;
+    metadata: BindMetadata[];
+  }>({ open: false, sql: "", metadata: [] });
+  const bindCacheRef = useRef<Record<string, { raw: string; isNull: boolean }>>({});
   const { resolveObject } = useObjectResolver(isConnected);
   const toast = useToastContext();
   const editorRef = useRef<SqlCodeEditorHandle | null>(null);
@@ -136,6 +148,55 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
     }
   }, [focusEditor]);
 
+  const runSqlWithBinds = useCallback(async (sql: string, binds?: Record<string, BindParameterValue>) => {
+    const tabId = activeTabId;
+    updateResultTab(tabId, {
+      executing: true,
+      error: null,
+      allRows: [],
+      result: null,
+      batchResults: null,
+      executedSql: sql,
+      executedBinds: binds ?? null,
+      activeSort: null,
+      sorting: false,
+    });
+
+    let shouldRestoreFocus = false;
+    try {
+      const start = performance.now();
+      const result = await executeSql(sql, { binds });
+      perfLog("query_execute", performance.now() - start, { sql: sql.slice(0, 80) });
+
+      if (result.data) {
+        perfLog("result_size", result.data.rows.length, { hasMore: result.data.hasMore });
+        updateResultTab(tabId, {
+          result: result.data,
+          allRows: result.data.rows,
+          executedSql: sql,
+          error: null,
+        });
+        return;
+      }
+
+      shouldRestoreFocus = true;
+      updateResultTab(tabId, {
+        error: result.error ?? "Unknown error",
+        result: null,
+        allRows: [],
+      });
+    } catch (error) {
+      shouldRestoreFocus = true;
+      updateResultTab(tabId, {
+        error: error instanceof Error ? error.message : String(error),
+        result: null,
+        allRows: [],
+      });
+    } finally {
+      recoverUiState(tabId, "runSqlWithBinds", shouldRestoreFocus);
+    }
+  }, [activeTabId, executeSql, recoverUiState, updateResultTab]);
+
   const executeActive = useCallback(async () => {
     if (!isConnected) {
       toast.warning("Connect to a database first");
@@ -148,6 +209,27 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
       return;
     }
 
+    // Detect bind parameters in the target statement — if any, open the
+    // parameters modal and defer execution until the user fills them in.
+    const binds = extractBindParameters(target.sql);
+    if (binds.length > 0) {
+      const inference = await inferBinds(target.sql);
+      const metadata: BindMetadata[] = binds.map((b) => {
+        const found = inference.data?.find((m) => m.name.toLowerCase() === b.name.toLowerCase());
+        return (
+          found ?? {
+            name: b.name,
+            dataType: "UNKNOWN",
+            inferred: false,
+            nullable: true,
+            reason: inference.error ?? "Not inferred",
+          }
+        );
+      });
+      setBindModal({ open: true, sql: target.sql, metadata });
+      return;
+    }
+
     const tabId = activeTabId;
     updateResultTab(tabId, {
       executing: true,
@@ -156,6 +238,7 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
       result: null,
       batchResults: null,
       executedSql: target.sql,
+      executedBinds: null,
       activeSort: null,
       sorting: false,
     });
@@ -207,6 +290,14 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
     const targets = snapshot ? resolveAllExecutionTargets(snapshot.document) : [];
     if (targets.length === 0) {
       toast.info("Enter one or more SQL statements to execute");
+      return;
+    }
+
+    // Execute-all does not support bind parameters — the modal flow only
+    // handles single-statement execution. Warn the user up front.
+    const withBinds = targets.find((t) => extractBindParameters(t.sql).length > 0);
+    if (withBinds) {
+      toast.warning("Execute All does not support :bind parameters — run that statement individually (Ctrl+Enter).");
       return;
     }
 
@@ -269,7 +360,10 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
     let shouldRestoreFocus = false;
     try {
       const sort = activeResultTab.activeSort;
-      const result = await executeSql(sql, { orderBy: sort ?? undefined });
+      const result = await executeSql(sql, {
+        orderBy: sort ?? undefined,
+        binds: activeResultTab.executedBinds ?? undefined,
+      });
       if (result.data) {
         updateResultTab(tabId, {
           result: result.data,
@@ -353,7 +447,10 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
     });
 
     try {
-      const result = await executeSql(sql, { orderBy: sort });
+      const result = await executeSql(sql, {
+        orderBy: sort,
+        binds: currentTab.executedBinds ?? undefined,
+      });
       if (requestSequenceRef.current !== requestId) return;
 
       if (result.data) {
@@ -402,6 +499,7 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
       const result = await executeSql(executedSql, {
         offset: rt.allRows.length,
         orderBy: rt.activeSort ?? undefined,
+        binds: rt.executedBinds ?? undefined,
       });
 
       if (result.data) {
@@ -447,10 +545,20 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
   const handleCountRows = useCallback(async (): Promise<{ totalRows?: number; error?: string }> => {
     const sql = activeResultTab.executedSql?.trim();
     if (!sql) return { error: "No query to count" };
-    const result = await countRows(sql);
-    if (result.data) return { totalRows: result.data.totalRows };
+    const binds = activeResultTab.executedBinds ?? undefined;
+    console.debug("[SqlEditor] countRows", {
+      tabId: activeTabId,
+      sql: sql.slice(0, 120),
+      bindNames: binds ? Object.keys(binds) : [],
+      bindValues: binds,
+    });
+    const result = await countRows(sql, binds);
+    if (result.data) {
+      console.debug("[SqlEditor] countRows result", { total: result.data.totalRows });
+      return { totalRows: result.data.totalRows };
+    }
     return { error: result.error ?? "Failed to count rows" };
-  }, [activeResultTab.executedSql, countRows]);
+  }, [activeResultTab.executedSql, activeResultTab.executedBinds, activeTabId, countRows]);
 
   executeTriggerRef.current = executeActive;
   executeAllTriggerRef.current = executeAll;
@@ -657,6 +765,19 @@ export function SqlEditor({ isConnected, executeTriggerRef, executeAllTriggerRef
           opacity: 0.4,
         }} />
       </div>
+
+      <BindParametersModal
+        open={bindModal.open}
+        statementPreview={bindModal.sql}
+        metadata={bindModal.metadata}
+        initialValues={bindCacheRef.current}
+        onCancel={() => setBindModal((m) => ({ ...m, open: false }))}
+        onExecute={(binds, cache) => {
+          bindCacheRef.current = { ...bindCacheRef.current, ...cache };
+          setBindModal((m) => ({ ...m, open: false }));
+          void runSqlWithBinds(bindModal.sql, binds);
+        }}
+      />
 
       {/* Results area */}
       <div style={{ flex: 1, overflow: "hidden", minHeight: MIN_RESULT_HEIGHT }}>

@@ -13,6 +13,7 @@ import type {
   QueryResultColumn,
   QueryResultRow,
   UpdateRowRequest,
+  BindMetadata,
   DatabaseObjectType,
   DatabaseObjectSummary,
   ObjectDetailResponse,
@@ -20,6 +21,7 @@ import type {
   TransactionState,
 } from "@gavadb/types";
 import { normalizeOracleError } from "./error-normalizer";
+import { buildOracleBinds, inferBindMetadata } from "./bind-inference";
 import {
   listObjectsSql,
   getSourceCodeSql,
@@ -50,7 +52,8 @@ export interface DatabaseRepository {
   disconnect(): Promise<void>;
   testConnection(): Promise<boolean>;
   executeQuery(request: SqlExecutionRequest): Promise<SqlExecutionResponse>;
-  countQueryRows(sql: string): Promise<{ totalRows: number; executionTimeMs: number }>;
+  inferBinds(sql: string): Promise<BindMetadata[]>;
+  countQueryRows(sql: string, binds?: Record<string, import("@gavadb/types").BindParameterValue>): Promise<{ totalRows: number; executionTimeMs: number }>;
   updateRows(request: UpdateRowRequest[]): Promise<MutationResult>;
   deleteRows(request: DeleteRowsRequest): Promise<MutationResult>;
   commitTransaction(): Promise<MutationResult>;
@@ -190,13 +193,15 @@ export class OracleRepository implements DatabaseRepository {
     const start = performance.now();
 
     try {
+      const binds = buildOracleBinds(request.binds);
+
       if (isSelect) {
-        return await this.executeSelect(conn, request.sql, pageSize, offset, start, request.orderBy);
+        return await this.executeSelect(conn, request.sql, pageSize, offset, start, request.orderBy, binds);
       }
 
       const result = await conn.execute(
         request.sql,
-        {},
+        binds,
         { outFormat: oracledb.OUT_FORMAT_OBJECT, autoCommit: false },
       );
 
@@ -310,13 +315,14 @@ export class OracleRepository implements DatabaseRepository {
     offset: number,
     start: number,
     orderBy?: { column: string; direction: "asc" | "desc" },
+    binds: Record<string, oracledb.BindParameter> = {},
   ): Promise<SqlExecutionResponse> {
     // Wrap the user query with ORDER BY + OFFSET/FETCH for pagination
     const paginatedSql = wrapWithPagination(sql, pageSize + 1, offset, orderBy);
 
     const result = await conn.execute(
       paginatedSql,
-      {},
+      binds,
       {
         outFormat: oracledb.OUT_FORMAT_OBJECT,
         resultSet: true,
@@ -353,7 +359,19 @@ export class OracleRepository implements DatabaseRepository {
     };
   }
 
-  async countQueryRows(sql: string): Promise<{ totalRows: number; executionTimeMs: number }> {
+  async inferBinds(sql: string): Promise<BindMetadata[]> {
+    const conn = this.requireConnection();
+    try {
+      return await inferBindMetadata(conn, sql);
+    } catch (err) {
+      throw normalizeOracleError(err);
+    }
+  }
+
+  async countQueryRows(
+    sql: string,
+    binds?: Record<string, import("@gavadb/types").BindParameterValue>,
+  ): Promise<{ totalRows: number; executionTimeMs: number }> {
     const conn = this.requireConnection();
     const cleanSql = sql.replace(/;\s*$/, "").trim();
     const countSql = `SELECT COUNT(*) AS CNT FROM (${cleanSql})`;
@@ -362,7 +380,7 @@ export class OracleRepository implements DatabaseRepository {
     try {
       const result = await conn.execute(
         countSql,
-        {},
+        buildOracleBinds(binds),
         { outFormat: oracledb.OUT_FORMAT_OBJECT },
       );
       const rows = (result.rows ?? []) as Array<{ CNT: number }>;

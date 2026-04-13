@@ -37,12 +37,50 @@ export interface MutationResult {
 /** Request para contagem total de linhas de uma query */
 export interface CountRowsRequest {
   sql: string;
+  /** Binds usados na query original (mesmo formato do SqlExecutionRequest) */
+  binds?: Record<string, BindParameterValue>;
 }
 
 /** Response da contagem total de linhas */
 export interface CountRowsResponse {
   totalRows: number;
   executionTimeMs: number;
+}
+
+/** Tipo lógico inferido para um bind parameter */
+export type BindDataType = "NUMBER" | "VARCHAR" | "DATE" | "TIMESTAMP" | "UNKNOWN";
+
+/** Valor de um bind parameter enviado pelo renderer */
+export interface BindParameterValue {
+  /** Valor cru digitado pelo usuário (string/number/boolean/null) */
+  value: unknown;
+  /** Tipo lógico escolhido/inferido (para conversão no lado Oracle) */
+  type?: BindDataType;
+  /** Quando true, envia NULL independentemente de value */
+  isNull?: boolean;
+}
+
+/** Metadados inferidos para um bind — alimenta a UI de parâmetros */
+export interface BindMetadata {
+  name: string;
+  dataType: BindDataType;
+  /** true se a inferência veio do dicionário Oracle, false se é fallback genérico */
+  inferred: boolean;
+  nullable: boolean;
+  /** Tamanho máximo para VARCHAR/CHAR */
+  length?: number;
+  precision?: number;
+  scale?: number;
+  /** Nome de coluna/tabela resolvidos, quando aplicável */
+  column?: string;
+  table?: string;
+  /** Motivo pelo qual não foi possível inferir (debug/ui hint) */
+  reason?: string;
+}
+
+/** Request enviado ao backend para inferir metadados dos binds de uma query */
+export interface InferBindsRequest {
+  sql: string;
 }
 
 /** Request para execução de SQL via IPC */
@@ -54,6 +92,8 @@ export interface SqlExecutionRequest {
   offset?: number;
   /** Ordenação aplicada pelo grid (coluna + direção) */
   orderBy?: { column: string; direction: "asc" | "desc" };
+  /** Bind parameters reais (node-oracledb), chaveados pelo nome do bind */
+  binds?: Record<string, BindParameterValue>;
 }
 
 /** Tipo de statement SQL detectado */

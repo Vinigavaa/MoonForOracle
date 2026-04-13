@@ -7,6 +7,7 @@ import type { DatabaseRepository } from "@gavadb/oracle";
 import type {
   ConnectionConfig,
   SqlExecutionRequest,
+  InferBindsRequest,
   CountRowsRequest,
   DatabaseObjectType,
   AppError,
@@ -174,6 +175,15 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     } catch (err) {
       const appError = logIpcError(IPC_CHANNELS.DB_EXECUTE_QUERY, err);
       return fail(appError);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DB_INFER_BINDS, async (_event, request: InferBindsRequest) => {
+    try {
+      const meta = await repo.inferBinds(request.sql);
+      return ok(meta);
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.DB_INFER_BINDS, err));
     }
   });
 

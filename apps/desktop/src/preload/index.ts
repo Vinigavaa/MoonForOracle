@@ -8,6 +8,7 @@ import type {
   TnsFileRequest,
   DatabaseObjectType,
   SqlExecutionRequest,
+  InferBindsRequest,
   CountRowsRequest,
   UpdateRowRequest,
   SaveConnectionRequest,
@@ -22,6 +23,9 @@ contextBridge.exposeInMainWorld("gavadb", {
 
   dbExecuteQuery: (request: SqlExecutionRequest) =>
     ipcRenderer.invoke(IPC_CHANNELS.DB_EXECUTE_QUERY, request),
+
+  dbInferBinds: (request: InferBindsRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.DB_INFER_BINDS, request),
 
   dbCountRows: (request: CountRowsRequest) =>
     ipcRenderer.invoke(IPC_CHANNELS.DB_COUNT_ROWS, request),

@@ -39,5 +39,5 @@ export async function countRows(
   repo: DatabaseRepository,
   request: CountRowsRequest,
 ): Promise<CountRowsResponse> {
-  return repo.countQueryRows(request.sql);
+  return repo.countQueryRows(request.sql, request.binds);
 }

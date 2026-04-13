@@ -13,3 +13,5 @@ export function formatDuration(ms: number): string {
 
 export type { ParsedSqlStatement, SqlCursorTarget, SqlStatementRange } from "./sql-statements.js";
 export { findStatementAtCursor, parseSqlStatements, resolveSqlSelection } from "./sql-statements.js";
+export type { BindOccurrence, ExtractedBind } from "./sql-binds.js";
+export { extractBindParameters } from "./sql-binds.js";

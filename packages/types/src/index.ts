@@ -12,6 +12,10 @@ export type {
   SqlExecutionResponse,
   CountRowsRequest,
   CountRowsResponse,
+  BindDataType,
+  BindParameterValue,
+  BindMetadata,
+  InferBindsRequest,
 } from "./query";
 export type { AppError, AppErrorCode } from "./error";
 export type { IpcResult } from "./ipc-result";

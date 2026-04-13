@@ -1,11 +1,18 @@
 import { useCallback } from "react";
 import type {
   AppError,
+  BindMetadata,
+  BindParameterValue,
   CountRowsResponse,
   MutationResult,
   SqlExecutionResponse,
   UpdateRowRequest,
 } from "@gavadb/types";
+
+interface InferBindsResult {
+  data?: BindMetadata[];
+  error?: string;
+}
 
 interface ExecutionResult {
   data?: SqlExecutionResponse;
@@ -25,7 +32,12 @@ interface CountRowsResult {
 export function useSqlExecution() {
   const execute = useCallback(async (
     sql: string,
-    options?: { pageSize?: number; offset?: number; orderBy?: { column: string; direction: "asc" | "desc" } },
+    options?: {
+      pageSize?: number;
+      offset?: number;
+      orderBy?: { column: string; direction: "asc" | "desc" };
+      binds?: Record<string, BindParameterValue>;
+    },
   ): Promise<ExecutionResult> => {
     try {
       const res = await window.gavadb.dbExecuteQuery({
@@ -33,6 +45,7 @@ export function useSqlExecution() {
         pageSize: options?.pageSize,
         offset: options?.offset,
         orderBy: options?.orderBy,
+        binds: options?.binds,
       });
       if (res.success) {
         return { data: res.data };
@@ -57,9 +70,12 @@ export function useSqlExecution() {
     }
   }, []);
 
-  const countRows = useCallback(async (sql: string): Promise<CountRowsResult> => {
+  const countRows = useCallback(async (
+    sql: string,
+    binds?: Record<string, BindParameterValue>,
+  ): Promise<CountRowsResult> => {
     try {
-      const res = await window.gavadb.dbCountRows({ sql: sql.trim() });
+      const res = await window.gavadb.dbCountRows({ sql: sql.trim(), binds });
       if (res.success) {
         return { data: res.data };
       }
@@ -70,7 +86,18 @@ export function useSqlExecution() {
     }
   }, []);
 
-  return { execute, updateRows, countRows };
+  const inferBinds = useCallback(async (sql: string): Promise<InferBindsResult> => {
+    try {
+      const res = await window.gavadb.dbInferBinds({ sql: sql.trim() });
+      if (res.success) return { data: res.data };
+      return { error: formatError(res.error) };
+    } catch (err) {
+      console.error("[SQL Execution] inferBinds failed", err);
+      return { error: formatUnknownError(err) };
+    }
+  }, []);
+
+  return { execute, updateRows, countRows, inferBinds };
 }
 
 function formatError(err: AppError): string {

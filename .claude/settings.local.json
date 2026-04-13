@@ -27,7 +27,14 @@
       "Bash(ls:*)",
       "Bash(node -e \"const o=require\\('oracledb'\\); console.log\\('version:', o.versionString, 'thin:', o.thin\\)\")",
       "Bash(xargs wc:*)",
-      "Bash(npx turbo:*)"
+      "Bash(npx turbo:*)",
+      "Bash(pnpm --filter @gavadb/utils test)",
+      "Bash(pnpm -r typecheck)",
+      "Bash(pnpm --filter @gavadb/types build)",
+      "Bash(pnpm --filter @gavadb/ipc-contract build)",
+      "Bash(pnpm --filter @gavadb/oracle build)",
+      "Bash(pnpm --filter @gavadb/utils build)",
+      "Bash(pnpm --filter @gavadb/renderer typecheck)"
     ]
   }
 }
