@@ -1,3 +1,4 @@
+import { useCallback, useState } from "react";
 import type {
   DatabaseObjectType,
   ObjectDetailResponse,
@@ -125,12 +126,48 @@ function detectSourceKind(source: string, objectType: DatabaseObjectType): strin
 // ─── Table view ─────────────────────────────────────────────────────
 
 function TableView({ detail }: { detail: Extract<ObjectDetailResponse, { kind: "table" }> }) {
+  const [sqlOpen, setSqlOpen] = useState(false);
+  const [sqlLoading, setSqlLoading] = useState(false);
+  const [sqlError, setSqlError] = useState<string | null>(null);
+  const [tableSql, setTableSql] = useState<string | null>(null);
+
+  const handleViewSql = useCallback(async () => {
+    if (sqlOpen) {
+      setSqlOpen(false);
+      return;
+    }
+
+    setSqlOpen(true);
+    if (tableSql || sqlLoading) return;
+
+    setSqlLoading(true);
+    setSqlError(null);
+
+    try {
+      const result = await window.gavadb.dbGetObjectSql("tables", detail.objectName);
+      if (result.success) {
+        setTableSql(result.data);
+      } else {
+        setSqlError(result.error.message + (result.error.details ? `\n${result.error.details}` : ""));
+      }
+    } catch (error) {
+      setSqlError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSqlLoading(false);
+    }
+  }, [detail.objectName, sqlLoading, sqlOpen, tableSql]);
+
   return (
     <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 16 }}>
       <section>
         <SectionHeader
           title="Columns"
           subtitle={detail.columns.length > 0 ? `${detail.columns.length} column(s)` : "No columns found"}
+          actions={(
+            <button onClick={handleViewSql} style={secondaryActionButtonStyle}>
+              View SQL
+            </button>
+          )}
         />
         {detail.columns.length > 0 ? (
           <ColumnTable columns={detail.columns} />
@@ -143,6 +180,19 @@ function TableView({ detail }: { detail: Extract<ObjectDetailResponse, { kind: "
         <SectionHeader title="Primary Key" />
         <PrimaryKeySection primaryKey={detail.primaryKey} />
       </section>
+
+      {sqlOpen && (
+        <section>
+          <SectionHeader title="Table SQL" subtitle="CREATE TABLE definition" />
+          {sqlLoading && <EmptySection message="Loading SQL definition..." />}
+          {sqlError && !sqlLoading && <div style={errorBoxStyle}>{sqlError}</div>}
+          {!sqlLoading && !sqlError && tableSql && (
+            <div style={{ height: 320, border: "1px solid var(--border-subtle)" }}>
+              <SourceView source={tableSql} />
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }
@@ -227,17 +277,20 @@ function ColumnTable({ columns }: { columns: ColumnInfo[] }) {
   );
 }
 
-function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+function SectionHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: React.ReactNode }) {
   return (
-    <div style={{ marginBottom: 10 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-secondary)" }}>
-        {title}
-      </div>
-      {subtitle && (
-        <div style={{ marginTop: 2, fontSize: 11, color: "var(--text-muted)" }}>
-          {subtitle}
+    <div style={{ marginBottom: 10, display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--text-secondary)" }}>
+          {title}
         </div>
-      )}
+        {subtitle && (
+          <div style={{ marginTop: 2, fontSize: 11, color: "var(--text-muted)" }}>
+            {subtitle}
+          </div>
+        )}
+      </div>
+      {actions}
     </div>
   );
 }
@@ -354,6 +407,17 @@ const reloadBtnStyle: React.CSSProperties = {
   padding: "2px 8px", fontSize: 11, background: "transparent",
   border: "1px solid var(--border-color)", borderRadius: "var(--radius)",
   color: "var(--text-muted)",
+};
+
+const secondaryActionButtonStyle: React.CSSProperties = {
+  padding: "4px 10px",
+  fontSize: 11,
+  fontWeight: 600,
+  background: "transparent",
+  border: "1px solid var(--border-color)",
+  borderRadius: "var(--radius)",
+  color: "var(--text-secondary)",
+  whiteSpace: "nowrap",
 };
 
 const thStyle: React.CSSProperties = {

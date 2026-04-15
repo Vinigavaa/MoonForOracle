@@ -16,6 +16,14 @@ export async function getObjectDetail(
   return repo.getObjectDetail(type, name);
 }
 
+export async function getObjectSql(
+  repo: DatabaseRepository,
+  type: DatabaseObjectType,
+  name: string,
+): Promise<string> {
+  return repo.getObjectSql(type, name);
+}
+
 export async function searchObjects(
   repo: DatabaseRepository,
   prefix: string,

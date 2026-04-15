@@ -296,6 +296,15 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     }
   });
 
+  ipcMain.handle(IPC_CHANNELS.DB_GET_OBJECT_SQL, async (_event, type: DatabaseObjectType, name: string) => {
+    try {
+      const sql = await useCases.getObjectSql(repo, type, name);
+      return ok(sql);
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.DB_GET_OBJECT_SQL, err));
+    }
+  });
+
   ipcMain.handle(IPC_CHANNELS.DB_SEARCH_OBJECTS, async (_event, prefix: string, limit?: number) => {
     try {
       const objects = await useCases.searchObjects(repo, prefix, limit);

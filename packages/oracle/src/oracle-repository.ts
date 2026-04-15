@@ -31,6 +31,7 @@ import {
   listObjectsSql,
   getSourceCodeSql,
   getTableColumnsSql,
+  getTableDdlSql,
   getViewColumnsSql,
   getViewTextSql,
   getPackageSourceSql,
@@ -61,6 +62,7 @@ export interface DatabaseRepository {
   testConnection(): Promise<boolean>;
   executeQuery(request: SqlExecutionRequest): Promise<SqlExecutionResponse>;
   inferBinds(sql: string): Promise<BindMetadata[]>;
+  getObjectSql(type: DatabaseObjectType, name: string): Promise<string>;
   countQueryRows(sql: string, binds?: Record<string, import("@gavadb/types").BindParameterValue>): Promise<{ totalRows: number; executionTimeMs: number }>;
   updateRows(request: UpdateRowRequest[]): Promise<MutationResult>;
   deleteRows(request: DeleteRowsRequest): Promise<MutationResult>;
@@ -584,6 +586,36 @@ export class OracleRepository implements DatabaseRepository {
     }
   }
 
+  async getObjectSql(type: DatabaseObjectType, name: string): Promise<string> {
+    const conn = this.requireConnection();
+
+    try {
+      if (type === "tables") {
+        return await this.fetchTableSql(conn, name);
+      }
+      if (type === "views") {
+        const detail = await this.fetchViewDetail(conn, name);
+        return detail.kind === "view"
+          ? (detail.text || `-- No SQL definition available for view ${name}`)
+          : `-- No SQL definition available for view ${name}`;
+      }
+      if (type === "ckts" || type === "ckcs") {
+        const detail = await this.fetchCheckConstraintDetail(conn, type, name);
+        return `ALTER TABLE ${detail.tableName}\n  ADD CONSTRAINT ${detail.objectName}\n  CHECK (${detail.searchCondition});`;
+      }
+
+      let source: string;
+      if (type === "packages") {
+        source = await this.fetchPackageSource(conn, name);
+      } else {
+        source = await this.fetchCodeSource(conn, type, name);
+      }
+      return source;
+    } catch (err) {
+      throw normalizeOracleError(err);
+    }
+  }
+
   getConnectionInfo(): ConnectionConfig | null {
     return this.currentConfig;
   }
@@ -616,6 +648,24 @@ export class OracleRepository implements DatabaseRepository {
     }));
 
     return { kind: "table", objectName: name, columns, primaryKey };
+  }
+
+  private async fetchTableSql(conn: Connection, name: string): Promise<string> {
+    await this.configureMetadataTransforms(conn);
+
+    const result = await conn.execute(
+      getTableDdlSql(name),
+      {},
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const rows = (result.rows ?? []) as Array<{ DDL: string | null }>;
+    const ddl = rows[0]?.DDL?.trim();
+
+    if (!ddl) {
+      return `-- No SQL definition available for table ${name}`;
+    }
+
+    return ddl.endsWith(";") ? ddl : `${ddl};`;
   }
 
   private async fetchViewDetail(conn: Connection, name: string): Promise<ObjectDetailResponse> {
@@ -717,6 +767,19 @@ export class OracleRepository implements DatabaseRepository {
       status: first.STATUS,
       validated: first.VALIDATED,
     };
+  }
+
+  private async configureMetadataTransforms(conn: Connection): Promise<void> {
+    await conn.execute(`
+      BEGIN
+        DBMS_METADATA.SET_TRANSFORM_PARAM(DBMS_METADATA.SESSION_TRANSFORM, 'STORAGE', FALSE);
+        DBMS_METADATA.SET_TRANSFORM_PARAM(DBMS_METADATA.SESSION_TRANSFORM, 'TABLESPACE', FALSE);
+        DBMS_METADATA.SET_TRANSFORM_PARAM(DBMS_METADATA.SESSION_TRANSFORM, 'SEGMENT_ATTRIBUTES', FALSE);
+        DBMS_METADATA.SET_TRANSFORM_PARAM(DBMS_METADATA.SESSION_TRANSFORM, 'EMIT_SCHEMA', FALSE);
+        DBMS_METADATA.SET_TRANSFORM_PARAM(DBMS_METADATA.SESSION_TRANSFORM, 'SQLTERMINATOR', TRUE);
+        DBMS_METADATA.SET_TRANSFORM_PARAM(DBMS_METADATA.SESSION_TRANSFORM, 'PRETTY', TRUE);
+      END;
+    `);
   }
 
   private async resolveEditableQueryInfo(

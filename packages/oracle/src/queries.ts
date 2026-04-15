@@ -129,6 +129,13 @@ export function getCheckConstraintSql(name: string): string {
   `;
 }
 
+export function getTableDdlSql(name: string): string {
+  return `
+    SELECT DBMS_METADATA.GET_DDL('TABLE', '${name}', SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')) AS DDL
+    FROM dual
+  `;
+}
+
 /** Mapeia DatabaseObjectType da app para OBJECT_TYPE do Oracle */
 const DB_OBJECT_TYPE_MAP: Record<DatabaseObjectType, string> = {
   tables: "TABLE",
