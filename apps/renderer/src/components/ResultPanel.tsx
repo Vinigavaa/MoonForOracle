@@ -1,5 +1,5 @@
 import { memo } from "react";
-import type { SqlExecutionResponse, UpdateRowRequest } from "@gavadb/types";
+import type { BindParameterValue, QueryExportColumn, SqlExecutionResponse, UpdateRowRequest } from "@gavadb/types";
 import type { BatchStatementExecution } from "../lib/sqlBatchExecution";
 import { BatchResultPanel } from "./BatchResultPanel";
 import { ResultGrid, type SortState } from "./ResultGrid";
@@ -7,6 +7,13 @@ import { StatementFeedback } from "./StatementFeedback";
 
 interface ResultPanelProps {
   result: SqlExecutionResponse | null;
+  exportQuery?: {
+    sql: string;
+    binds?: Record<string, BindParameterValue>;
+    orderBy?: SortState | null;
+    columns: QueryExportColumn[];
+    suggestedFileName?: string;
+  } | null;
   batchResults?: BatchStatementExecution[] | null;
   error: string | null;
   executing: boolean;
@@ -24,6 +31,7 @@ interface ResultPanelProps {
 
 export const ResultPanel = memo(function ResultPanel({
   result,
+  exportQuery,
   batchResults,
   error,
   executing,
@@ -85,6 +93,7 @@ export const ResultPanel = memo(function ResultPanel({
     return (
       <ResultGrid
         result={result}
+        exportQuery={exportQuery}
         mutating={mutating}
         loadingMore={loadingMore}
         sorting={sorting}

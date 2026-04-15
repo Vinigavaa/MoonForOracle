@@ -34,7 +34,10 @@
       "Bash(pnpm --filter @gavadb/ipc-contract build)",
       "Bash(pnpm --filter @gavadb/oracle build)",
       "Bash(pnpm --filter @gavadb/utils build)",
-      "Bash(pnpm --filter @gavadb/renderer typecheck)"
+      "Bash(pnpm --filter @gavadb/renderer typecheck)",
+      "Bash(cat:*)",
+      "Bash(pnpm --filter @gavadb/renderer build)",
+      "Bash(pnpm --filter @gavadb/desktop package:installer)"
     ]
   }
 }

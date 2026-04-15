@@ -19,6 +19,9 @@ import type {
   InferBindsRequest,
   SearchColumnsRequest,
   SqlColumnSuggestion,
+  QueryExportRequest,
+  QueryExportResponse,
+  QueryExportProgress,
   ObjectDetailResponse,
   UpdateRowRequest,
   AppError,
@@ -46,6 +49,7 @@ export interface IpcMainHandlers {
   "db:get-source": (type: DatabaseObjectType, name: string) => Promise<IpcResult<ObjectDetailResponse>>;
   "db:search-objects": (prefix: string, limit?: number) => Promise<IpcResult<DatabaseObjectSuggestion[]>>;
   "db:search-columns": (request: SearchColumnsRequest) => Promise<IpcResult<SqlColumnSuggestion[]>>;
+  "db:export-query-result": (request: QueryExportRequest) => Promise<IpcResult<QueryExportResponse>>;
   "conn:list-saved": () => Promise<IpcResult<SavedConnection[]>>;
   "conn:get-with-password": (id: string) => Promise<IpcResult<SavedConnectionWithPassword>>;
   "conn:save": (request: SaveConnectionRequest) => Promise<IpcResult<SavedConnection>>;
@@ -63,6 +67,7 @@ export interface IpcRendererEvents {
   "db:status-changed": (status: ConnectionStatus) => void;
   "db:transaction-state-changed": (state: TransactionState) => void;
   "db:error": (error: AppError) => void;
+  "db:export-progress": (progress: QueryExportProgress) => void;
   "window:maximized-changed": (isMaximized: boolean) => void;
 }
 
@@ -84,9 +89,11 @@ export const IPC_CHANNELS = {
   DB_GET_SOURCE: "db:get-source",
   DB_SEARCH_OBJECTS: "db:search-objects",
   DB_SEARCH_COLUMNS: "db:search-columns",
+  DB_EXPORT_QUERY_RESULT: "db:export-query-result",
   DB_STATUS_CHANGED: "db:status-changed",
   DB_TRANSACTION_STATE_CHANGED: "db:transaction-state-changed",
   DB_ERROR: "db:error",
+  DB_EXPORT_PROGRESS: "db:export-progress",
   CONN_LIST_SAVED: "conn:list-saved",
   CONN_GET_WITH_PASSWORD: "conn:get-with-password",
   CONN_SAVE: "conn:save",
@@ -118,6 +125,7 @@ export interface GavaDbApi {
   dbGetSource: (type: DatabaseObjectType, name: string) => Promise<IpcResult<ObjectDetailResponse>>;
   dbSearchObjects: (prefix: string, limit?: number) => Promise<IpcResult<DatabaseObjectSuggestion[]>>;
   dbSearchColumns: (request: SearchColumnsRequest) => Promise<IpcResult<SqlColumnSuggestion[]>>;
+  dbExportQueryResult: (request: QueryExportRequest) => Promise<IpcResult<QueryExportResponse>>;
   connListSaved: () => Promise<IpcResult<SavedConnection[]>>;
   connGetWithPassword: (id: string) => Promise<IpcResult<SavedConnectionWithPassword>>;
   connSave: (request: SaveConnectionRequest) => Promise<IpcResult<SavedConnection>>;
@@ -131,5 +139,6 @@ export interface GavaDbApi {
   onStatusChanged: (cb: (status: ConnectionStatus) => void) => () => void;
   onTransactionStateChanged: (cb: (state: TransactionState) => void) => () => void;
   onError: (cb: (error: AppError) => void) => () => void;
+  onExportProgress: (cb: (progress: QueryExportProgress) => void) => () => void;
   onWindowMaximizedChanged: (cb: (isMaximized: boolean) => void) => () => void;
 }

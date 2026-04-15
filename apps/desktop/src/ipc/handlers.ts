@@ -17,15 +17,18 @@ import type {
   TnsFileRequest,
   SaveConnectionRequest,
   SearchColumnsRequest,
+  QueryExportRequest,
 } from "@gavadb/types";
 import * as useCases from "../use-cases";
 import { SavedConnectionsStore } from "../lib/saved-connections-store";
+import { QueryExportService } from "../services/export/query-export-service";
 
 const repo: DatabaseRepository = new OracleRepository({
   configDir: findTnsAdmin(),
 });
 
 const savedConnectionsStore = new SavedConnectionsStore();
+const exportService = new QueryExportService(repo);
 
 /** Discovers TNS_ADMIN from env, Oracle Client installs, or well-known locations */
 function findTnsAdmin(): string | undefined {
@@ -311,6 +314,28 @@ export function registerIpcHandlers(win: BrowserWindow): void {
     }
   });
 
+  ipcMain.handle(IPC_CHANNELS.DB_EXPORT_QUERY_RESULT, async (_event, request: QueryExportRequest) => {
+    try {
+      const filePath = await pickExportPath(win, request);
+      if (!filePath) {
+        return ok({
+          exportId: request.exportId,
+          canceled: true,
+          filePath: null,
+          format: request.format,
+          rowsExported: 0,
+        });
+      }
+
+      const result = await exportService.exportQueryResult(request, filePath, (progress) => {
+        win.webContents.send(IPC_CHANNELS.DB_EXPORT_PROGRESS, progress);
+      });
+      return ok(result);
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.DB_EXPORT_QUERY_RESULT, err));
+    }
+  });
+
   // --- Saved Connections handlers ---
 
   ipcMain.handle(IPC_CHANNELS.CONN_LIST_SAVED, async () => {
@@ -362,4 +387,53 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       return fail(logIpcError(IPC_CHANNELS.CONN_UPDATE_LAST_USED, err));
     }
   });
+}
+
+async function pickExportPath(win: BrowserWindow, request: QueryExportRequest): Promise<string | null> {
+  const extension = request.format === "xlsx" ? "xlsx" : "csv";
+  const defaultFileName = ensureFileExtension(
+    sanitizeSuggestedFileName(request.suggestedFileName || `query-results-${timestampFileSegment()}`),
+    extension,
+  );
+
+  const result = await dialog.showSaveDialog(win, {
+    title: `Export query results as ${request.format.toUpperCase()}`,
+    defaultPath: path.join(app.getPath("documents"), defaultFileName),
+    filters: [
+      request.format === "xlsx"
+        ? { name: "Excel Workbook", extensions: ["xlsx"] }
+        : { name: "CSV", extensions: ["csv"] },
+      { name: "All files", extensions: ["*"] },
+    ],
+  });
+
+  if (result.canceled || !result.filePath) {
+    return null;
+  }
+
+  return ensureFileExtension(result.filePath, extension);
+}
+
+function sanitizeSuggestedFileName(value: string): string {
+  return value
+    .trim()
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "") || "query-results";
+}
+
+function ensureFileExtension(filePath: string, extension: string): string {
+  return filePath.toLowerCase().endsWith(`.${extension}`) ? filePath : `${filePath}.${extension}`;
+}
+
+function timestampFileSegment(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  const hour = String(now.getHours()).padStart(2, "0");
+  const minute = String(now.getMinutes()).padStart(2, "0");
+  const second = String(now.getSeconds()).padStart(2, "0");
+  return `${year}${month}${day}-${hour}${minute}${second}`;
 }

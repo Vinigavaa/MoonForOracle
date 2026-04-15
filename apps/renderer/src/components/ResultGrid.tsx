@@ -1,7 +1,10 @@
 import { memo, useRef, useState, useEffect, useCallback, useMemo } from "react";
-import type { QueryResultColumn, QueryResultRow, SqlExecutionResponse, UpdateRowRequest } from "@gavadb/types";
+import type { BindParameterValue, QueryExportColumn, QueryResultColumn, QueryResultRow, SqlExecutionResponse, UpdateRowRequest } from "@gavadb/types";
 import { formatDuration } from "@gavadb/utils";
 import { countRender } from "../lib/perfLog";
+import { ExportResultDialog } from "./ExportResultDialog";
+import { useResultExport } from "../hooks/useResultExport";
+import { useToastContext } from "../hooks/ToastContext";
 
 export type SortDirection = "asc" | "desc";
 export interface SortState {
@@ -11,6 +14,13 @@ export interface SortState {
 
 interface ResultGridProps {
   result: SqlExecutionResponse;
+  exportQuery?: {
+    sql: string;
+    binds?: Record<string, BindParameterValue>;
+    orderBy?: SortState | null;
+    columns: QueryExportColumn[];
+    suggestedFileName?: string;
+  } | null;
   mutating?: boolean;
   loadingMore?: boolean;
   sorting?: boolean;
@@ -74,6 +84,7 @@ function formatCellDisplay(value: unknown, column: QueryResultColumn): string {
 
 export const ResultGrid = memo(function ResultGrid({
   result,
+  exportQuery,
   mutating,
   loadingMore,
   sorting,
@@ -96,6 +107,10 @@ export const ResultGrid = memo(function ResultGrid({
   const [countingRows, setCountingRows] = useState(false);
   const [totalRowCount, setTotalRowCount] = useState<number | null>(null);
   const [countError, setCountError] = useState<string | null>(null);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const { exportResult, exportInProgress, exportProgress, clearExportProgress } = useResultExport();
+  const toast = useToastContext();
+  const lastExportStageRef = useRef<string | null>(null);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -113,6 +128,20 @@ export const ResultGrid = memo(function ResultGrid({
     setTotalRowCount(null);
     setCountError(null);
   }, [result]);
+
+  useEffect(() => {
+    if (!exportProgress || exportProgress.stage === lastExportStageRef.current) return;
+    lastExportStageRef.current = exportProgress.stage;
+
+    if (exportProgress.stage === "completed") {
+      toast.success(exportProgress.message);
+      return;
+    }
+
+    if (exportProgress.stage === "error") {
+      toast.error(exportProgress.message);
+    }
+  }, [exportProgress, toast]);
 
   const onScroll = useCallback(() => {
     if (scrollRef.current) setScrollTop(scrollRef.current.scrollTop);
@@ -257,6 +286,32 @@ export const ResultGrid = memo(function ResultGrid({
       setCountingRows(false);
     }
   }, [onCountRows, countingRows]);
+
+  const handleExport = useCallback(async (options: { format: "csv" | "xlsx"; delimiter: string; autoFitColumns: boolean }) => {
+    if (!exportQuery?.sql.trim()) return;
+
+    lastExportStageRef.current = null;
+    const response = await exportResult({
+      sql: exportQuery.sql,
+      binds: exportQuery.binds,
+      orderBy: exportQuery.orderBy ?? undefined,
+      columns: exportQuery.columns,
+      format: options.format,
+      delimiter: options.format === "csv" ? options.delimiter : undefined,
+      suggestedFileName: exportQuery.suggestedFileName,
+      autoFitColumns: options.format === "xlsx" ? options.autoFitColumns : undefined,
+    });
+
+    if (response.data?.canceled) {
+      clearExportProgress();
+      setExportDialogOpen(false);
+      return;
+    }
+
+    if (response.data && !response.data.canceled) {
+      setExportDialogOpen(false);
+    }
+  }, [clearExportProgress, exportQuery, exportResult]);
 
   // ─── Keyboard navigation ─────────────────────────────────────────
 
@@ -416,6 +471,13 @@ export const ResultGrid = memo(function ResultGrid({
             {countingRows ? "Counting..." : totalRowCount != null ? `Total: ${totalRowCount.toLocaleString()} rows` : "Count Rows"}
           </button>
         )}
+        <button
+          onClick={() => setExportDialogOpen(true)}
+          disabled={!exportQuery?.sql || exportInProgress}
+          style={secondaryButtonStyle}
+        >
+          {exportInProgress ? "Exporting..." : "Export"}
+        </button>
         {countError && <span style={countErrorStyle}>{countError}</span>}
         <span style={toolbarInfoStyle}>
           {canEditRows
@@ -550,6 +612,20 @@ export const ResultGrid = memo(function ResultGrid({
         {result.hasMore && <span style={mutedItalicStyle}>Result limited for performance. Load more to continue.</span>}
         {!result.hasMore && result.rowCount > 0 && <span style={mutedItalicStyle}>All rows loaded</span>}
       </div>
+
+      <ExportResultDialog
+        open={exportDialogOpen}
+        inProgress={exportInProgress}
+        progress={exportProgress}
+        onClose={() => {
+          if (!exportInProgress) {
+            lastExportStageRef.current = null;
+            clearExportProgress();
+          }
+          setExportDialogOpen(false);
+        }}
+        onConfirm={handleExport}
+      />
     </div>
   );
 });

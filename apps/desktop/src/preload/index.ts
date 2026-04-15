@@ -13,6 +13,8 @@ import type {
   UpdateRowRequest,
   SaveConnectionRequest,
   SearchColumnsRequest,
+  QueryExportRequest,
+  QueryExportProgress,
 } from "@gavadb/types";
 
 contextBridge.exposeInMainWorld("gavadb", {
@@ -64,6 +66,9 @@ contextBridge.exposeInMainWorld("gavadb", {
   dbSearchColumns: (request: SearchColumnsRequest) =>
     ipcRenderer.invoke(IPC_CHANNELS.DB_SEARCH_COLUMNS, request),
 
+  dbExportQueryResult: (request: QueryExportRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.DB_EXPORT_QUERY_RESULT, request),
+
   connListSaved: () =>
     ipcRenderer.invoke(IPC_CHANNELS.CONN_LIST_SAVED),
 
@@ -110,6 +115,12 @@ contextBridge.exposeInMainWorld("gavadb", {
     const handler = (_e: IpcRendererEvent, error: AppError) => cb(error);
     ipcRenderer.on(IPC_CHANNELS.DB_ERROR, handler);
     return () => { ipcRenderer.removeListener(IPC_CHANNELS.DB_ERROR, handler); };
+  },
+
+  onExportProgress: (cb: (progress: QueryExportProgress) => void) => {
+    const handler = (_e: IpcRendererEvent, progress: QueryExportProgress) => cb(progress);
+    ipcRenderer.on(IPC_CHANNELS.DB_EXPORT_PROGRESS, handler);
+    return () => { ipcRenderer.removeListener(IPC_CHANNELS.DB_EXPORT_PROGRESS, handler); };
   },
 
   onWindowMaximizedChanged: (cb: (isMaximized: boolean) => void) => {

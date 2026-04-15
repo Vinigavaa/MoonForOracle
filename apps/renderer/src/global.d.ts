@@ -5,3 +5,8 @@ declare global {
     gavadb: GavaDbApi;
   }
 }
+
+declare module "*.png" {
+  const src: string;
+  export default src;
+}

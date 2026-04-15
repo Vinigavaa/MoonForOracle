@@ -1,5 +1,13 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import type { SqlExecutionResponse, QueryResultRow, UpdateRowRequest, BindMetadata, BindParameterValue, SearchColumnsRequest } from "@gavadb/types";
+import type {
+  SqlExecutionResponse,
+  QueryResultRow,
+  UpdateRowRequest,
+  BindMetadata,
+  BindParameterValue,
+  SearchColumnsRequest,
+  QueryExportColumn,
+} from "@gavadb/types";
 import type { DatabaseObjectType } from "@gavadb/types";
 import { generateId, extractBindParameters } from "@gavadb/utils";
 import { BindParametersModal } from "./BindParametersModal";
@@ -603,6 +611,28 @@ export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(function Sq
     return result.data;
   }, [isConnected]);
 
+  const exportColumns = useMemo<QueryExportColumn[]>(
+    () => (activeResultTab.result?.columns ?? []).map((column) => ({
+      key: column.name,
+      label: column.name,
+      dataType: column.dataType,
+      visible: true,
+    })),
+    [activeResultTab.result?.columns],
+  );
+
+  const exportQuery = useMemo(() => {
+    const sql = activeResultTab.executedSql?.trim();
+    if (!sql || !activeResultTab.result || activeResultTab.result.statementType !== "select") return null;
+    return {
+      sql,
+      binds: activeResultTab.executedBinds ?? undefined,
+      orderBy: activeResultTab.activeSort,
+      columns: exportColumns,
+      suggestedFileName: `query-results-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}`,
+    };
+  }, [activeResultTab.activeSort, activeResultTab.executedBinds, activeResultTab.executedSql, activeResultTab.result, exportColumns]);
+
   const addTab = useCallback(() => {
     const t = createEditorState();
     setEditorTabs((prev) => [...prev, t]);
@@ -815,6 +845,7 @@ export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(function Sq
       <div style={{ flex: 1, overflow: "hidden", minHeight: MIN_RESULT_HEIGHT }}>
         <ResultPanel
           result={activeResultTab.result}
+          exportQuery={exportQuery}
           batchResults={activeResultTab.batchResults}
           error={activeResultTab.error}
           executing={activeResultTab.executing}

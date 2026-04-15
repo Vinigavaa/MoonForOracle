@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import type { ConnectionStatus } from "@gavadb/types";
 import { Bolt } from "lucide-react";
+import moonForOracleLogo from "../assets/MoonForOracle.png";
 
 interface ToolbarProps {
   status: ConnectionStatus;
@@ -84,9 +85,11 @@ export function Toolbar({
       gap: 8,
       flexShrink: 0,
     }}>
-      <span style={{ fontWeight: 600, fontSize: 14, color: "var(--accent)", marginRight: 8 }}>
-        Moon For Oracle
-      </span>
+      <img
+        src={moonForOracleLogo}
+        alt="Moon For Oracle"
+        style={{ height: 20, width: "auto", marginRight: 8, objectFit: "contain" }}
+      />
 
       <div style={{ width: 1, height: 18, background: "var(--border-color)", marginRight: 4 }} />
 

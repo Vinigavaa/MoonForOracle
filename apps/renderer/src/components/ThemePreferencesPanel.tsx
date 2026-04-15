@@ -3,6 +3,7 @@ import { useEditorTheme } from "../hooks/EditorThemeContext";
 import { useToastContext } from "../hooks/ToastContext";
 import type { EditorThemeConfig } from "../lib/editorTheme";
 import { DEFAULT_THEME, FIXED_FONT_FAMILY, getContrastWarning, isThemeDefault } from "../lib/editorTheme";
+import { SqlCodeEditor } from "./SqlCodeEditor";
 
 const PREVIEW_SQL = `SELECT employee_id,
        first_name || ' ' || last_name AS full_name,
@@ -455,7 +456,7 @@ export function ThemePreferencesPanel({ onClose }: ThemePreferencesPanelProps) {
           <div style={previewTitleStyle}>Pré-visualização</div>
           <ThemePreview />
           <div style={editorPreviewStyle}>
-            <pre style={editorPreviewContentStyle}>{PREVIEW_SQL}</pre>
+            <SqlCodeEditor value={PREVIEW_SQL} readOnly />
           </div>
         </div>
       </div>
@@ -677,7 +678,6 @@ const previewCellModifiedStyle: CSSProperties = { ...previewCellStyle, backgroun
 const previewCellEditingStyle: CSSProperties = { ...previewCellAltStyle, background: "var(--cell-editing-bg)", outline: "2px solid var(--focus-color)", outlineOffset: -2 };
 const feedbackRowStyle: CSSProperties = { display: "flex", gap: 14, padding: "0 12px 12px", fontSize: 12, fontWeight: 700 };
 const editorPreviewStyle: CSSProperties = { height: 230, border: "1px solid var(--border-color)", borderRadius: "var(--radius)", overflow: "hidden", background: "var(--editor-bg)" };
-const editorPreviewContentStyle: CSSProperties = { height: "100%", margin: 0, padding: "12px 14px", overflow: "auto", background: "var(--editor-bg)", color: "var(--editor-text)", fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.6, whiteSpace: "pre-wrap" };
 
 
 

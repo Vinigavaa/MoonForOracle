@@ -33,5 +33,13 @@ export type {
   SearchColumnsRequest,
   SqlColumnSuggestion,
 } from "./query";
+export type {
+  QueryExportFormat,
+  QueryExportColumn,
+  QueryExportRequest,
+  QueryExportResponse,
+  QueryExportStage,
+  QueryExportProgress,
+} from "./export";
 export type { AppError, AppErrorCode } from "./error";
 export type { IpcResult } from "./ipc-result";
