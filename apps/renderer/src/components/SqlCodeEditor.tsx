@@ -22,6 +22,8 @@ interface SqlCodeEditorProps {
   onChange?: (value: string) => void;
   onExecute?: () => void;
   onExecuteAll?: () => void;
+  onSave?: () => void;
+  onSaveAs?: () => void;
   onOpenObject?: (name: string) => void | Promise<void>;
   onSearchObjectsByPrefix?: (prefix: string, limit?: number) => Promise<DatabaseObjectSuggestion[]>;
   onSearchColumns?: (request: SearchColumnsRequest) => Promise<SqlColumnSuggestion[]>;
@@ -286,6 +288,8 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
   onChange,
   onExecute,
   onExecuteAll,
+  onSave,
+  onSaveAs,
   onOpenObject,
   onSearchObjectsByPrefix,
   onSearchColumns,
@@ -301,6 +305,8 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
   const onChangeRef = useRef(onChange);
   const onExecuteRef = useRef(onExecute);
   const onExecuteAllRef = useRef(onExecuteAll);
+  const onSaveRef = useRef(onSave);
+  const onSaveAsRef = useRef(onSaveAs);
   const onOpenObjectRef = useRef(onOpenObject);
   const onSearchObjectsByPrefixRef = useRef(onSearchObjectsByPrefix);
   const onSearchColumnsRef = useRef(onSearchColumns);
@@ -345,6 +351,8 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
   onChangeRef.current = onChange;
   onExecuteRef.current = onExecute;
   onExecuteAllRef.current = onExecuteAll;
+  onSaveRef.current = onSave;
+  onSaveAsRef.current = onSaveAs;
   onOpenObjectRef.current = onOpenObject;
   onSearchObjectsByPrefixRef.current = onSearchObjectsByPrefix;
   onSearchColumnsRef.current = onSearchColumns;
@@ -562,6 +570,16 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
 
     const extensions = [
       keymap.of([
+        {
+          key: "Ctrl-s",
+          mac: "Cmd-s",
+          run: () => { onSaveRef.current?.(); return true; },
+        },
+        {
+          key: "Shift-Ctrl-s",
+          mac: "Shift-Cmd-s",
+          run: () => { onSaveAsRef.current?.(); return true; },
+        },
         {
           key: "Ctrl-Enter",
           mac: "Cmd-Enter",

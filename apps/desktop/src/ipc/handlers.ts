@@ -120,6 +120,20 @@ export function registerIpcHandlers(win: BrowserWindow): void {
   win.on("unmaximize", () => emitWindowMaximizedState(win));
   win.on("restore", () => emitWindowMaximizedState(win));
 
+  ipcMain.handle(IPC_CHANNELS.FILE_SAVE, async (_event, request: { content: string; filePath?: string }) => {
+    try {
+      const targetPath = request.filePath?.trim() || await pickSqlSavePath(win);
+      if (!targetPath) {
+        return ok(null);
+      }
+
+      await fs.promises.writeFile(targetPath, request.content, "utf8");
+      return ok(targetPath);
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.FILE_SAVE, err));
+    }
+  });
+
   ipcMain.handle(IPC_CHANNELS.WINDOW_MINIMIZE, async () => {
     win.minimize();
     return ok(undefined);
@@ -396,6 +410,23 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       return fail(logIpcError(IPC_CHANNELS.CONN_UPDATE_LAST_USED, err));
     }
   });
+}
+
+async function pickSqlSavePath(win: BrowserWindow): Promise<string | null> {
+  const result = await dialog.showSaveDialog(win, {
+    title: "Save SQL file",
+    defaultPath: path.join(app.getPath("documents"), "query.sql"),
+    filters: [
+      { name: "SQL Files", extensions: ["sql"] },
+      { name: "All Files", extensions: ["*"] },
+    ],
+  });
+
+  if (result.canceled || !result.filePath) {
+    return null;
+  }
+
+  return result.filePath;
 }
 
 async function pickExportPath(win: BrowserWindow, request: QueryExportRequest): Promise<string | null> {

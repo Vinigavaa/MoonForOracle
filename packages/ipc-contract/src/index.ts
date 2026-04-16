@@ -33,6 +33,7 @@ import type {
 
 /** Canais que o renderer pode invocar no main process (ipcRenderer.invoke) */
 export interface IpcMainHandlers {
+  "file:save": (request: { content: string; filePath?: string }) => Promise<IpcResult<string | null>>;
   "db:connect": (config: ConnectionConfig) => Promise<IpcResult<void>>;
   "db:disconnect": () => Promise<IpcResult<void>>;
   "db:execute-query": (request: SqlExecutionRequest) => Promise<IpcResult<SqlExecutionResponse>>;
@@ -74,6 +75,7 @@ export interface IpcRendererEvents {
 
 /** Nomes dos canais IPC — evita strings mágicas espalhadas pelo código */
 export const IPC_CHANNELS = {
+  FILE_SAVE: "file:save",
   DB_CONNECT: "db:connect",
   DB_DISCONNECT: "db:disconnect",
   DB_EXECUTE_QUERY: "db:execute-query",
@@ -111,6 +113,7 @@ export const IPC_CHANNELS = {
 
 /** API exposta ao renderer via contextBridge (window.gavadb) */
 export interface GavaDbApi {
+  saveFile: (content: string, filePath?: string) => Promise<IpcResult<string | null>>;
   dbConnect: (config: ConnectionConfig) => Promise<IpcResult<void>>;
   dbDisconnect: () => Promise<IpcResult<void>>;
   dbExecuteQuery: (request: SqlExecutionRequest) => Promise<IpcResult<SqlExecutionResponse>>;

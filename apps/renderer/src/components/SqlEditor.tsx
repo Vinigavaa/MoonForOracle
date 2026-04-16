@@ -28,6 +28,7 @@ const MAX_ACCUMULATED_ROWS = 5_000;
 interface TabEditorState {
   id: string;
   sql: string;
+  filePath: string | null;
   currentExecutionSnapshot: SqlEditorExecutionSnapshot | null;
 }
 
@@ -57,7 +58,7 @@ export interface SqlTab extends TabEditorState, TabResultState {}
 
 function createEditorState(): TabEditorState {
   const id = generateId();
-  return { id, sql: "", currentExecutionSnapshot: null };
+  return { id, sql: "", filePath: null, currentExecutionSnapshot: null };
 }
 
 function createResultState(): TabResultState {
@@ -611,6 +612,30 @@ export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(function Sq
     return result.data;
   }, [isConnected]);
 
+  const saveActiveFile = useCallback(async (saveAs = false) => {
+    const tab = activeEditorTab;
+    if (!tab) return;
+
+    try {
+      const result = await window.gavadb.saveFile(tab.sql, saveAs ? undefined : tab.filePath ?? undefined);
+      if (!result.success) {
+        toast.error(result.error.message);
+        return;
+      }
+
+      if (!result.data) {
+        return;
+      }
+
+      updateEditorTab(tab.id, { filePath: result.data });
+      toast.success("SQL file saved");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      focusEditor();
+    }
+  }, [activeEditorTab, focusEditor, toast, updateEditorTab]);
+
   const exportColumns = useMemo<QueryExportColumn[]>(
     () => (activeResultTab.result?.columns ?? []).map((column) => ({
       key: column.name,
@@ -791,6 +816,8 @@ export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(function Sq
           onChange={(value) => updateEditorTab(activeEditorTab.id, { sql: value })}
           onExecute={executeActive}
           onExecuteAll={executeAll}
+          onSave={() => void saveActiveFile(false)}
+          onSaveAs={() => void saveActiveFile(true)}
           onExecutionContextChange={(snapshot) => updateEditorTab(activeEditorTab.id, { currentExecutionSnapshot: snapshot })}
           onOpenObject={handleOpenObject}
           onSearchObjectsByPrefix={handleSearchObjectsByPrefix}

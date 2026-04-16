@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type {
   DatabaseObjectType,
   ObjectDetailResponse,
@@ -236,7 +236,30 @@ function ViewView({ detail }: { detail: Extract<ObjectDetailResponse, { kind: "v
 
 // ─── Shared column table ────────────────────────────────────────────
 
+type ColumnSortDirection = "asc" | "desc" | null;
+
 function ColumnTable({ columns }: { columns: ColumnInfo[] }) {
+  const [sortDirection, setSortDirection] = useState<ColumnSortDirection>(null);
+  const originalColumns = columns;
+  const displayColumns = useMemo(() => {
+    if (!sortDirection) return originalColumns;
+
+    return [...originalColumns].sort((a, b) => {
+      const comparison = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+  }, [originalColumns, sortDirection]);
+
+  const toggleColumnSort = useCallback(() => {
+    setSortDirection((current) => {
+      if (current === null) return "asc";
+      if (current === "asc") return "desc";
+      return null;
+    });
+  }, []);
+
+  const sortArrow = sortDirection === "asc" ? " \u25B2" : sortDirection === "desc" ? " \u25BC" : "";
+
   return (
     <table style={{
       width: "100%",
@@ -246,13 +269,17 @@ function ColumnTable({ columns }: { columns: ColumnInfo[] }) {
     }}>
       <thead>
         <tr>
-          {["#", "Column", "Data Type", "Nullable"].map((h) => (
-            <th key={h} style={thStyle}>{h}</th>
-          ))}
+          <th style={thStyle}>#</th>
+          <th style={sortableColumnHeaderStyle} onClick={toggleColumnSort} title="Sort by column name">
+            Column
+            {sortArrow && <span style={sortArrowStyle}>{sortArrow}</span>}
+          </th>
+          <th style={thStyle}>Data Type</th>
+          <th style={thStyle}>Nullable</th>
         </tr>
       </thead>
       <tbody>
-        {columns.map((col, i) => (
+        {displayColumns.map((col, i) => (
           <tr key={col.name} style={{ background: i % 2 === 0 ? "transparent" : "var(--grid-alt-row-bg)" }}>
             <td style={{ ...tdStyle, color: "var(--text-muted)", width: 40, textAlign: "right" }}>
               {col.position}
@@ -425,6 +452,15 @@ const thStyle: React.CSSProperties = {
   color: "var(--text-muted)", borderBottom: "1px solid var(--border-color)",
   whiteSpace: "nowrap",
 };
+
+const sortableColumnHeaderStyle: React.CSSProperties = {
+  ...thStyle,
+  color: "var(--accent)",
+  cursor: "pointer",
+  userSelect: "none",
+};
+
+const sortArrowStyle: React.CSSProperties = { fontSize: 10, marginLeft: 2 };
 
 const tdStyle: React.CSSProperties = {
   padding: "5px 10px", borderBottom: "1px solid var(--border-subtle)",

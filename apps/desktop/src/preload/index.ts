@@ -18,6 +18,9 @@ import type {
 } from "@gavadb/types";
 
 contextBridge.exposeInMainWorld("gavadb", {
+  saveFile: (content: string, filePath?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.FILE_SAVE, { content, filePath }),
+
   dbConnect: (config: ConnectionConfig) =>
     ipcRenderer.invoke(IPC_CHANNELS.DB_CONNECT, config),
 
