@@ -33,7 +33,7 @@ import {
   getTableColumnsSql,
   getTableDdlSql,
   getViewColumnsSql,
-  getViewTextSql,
+  getViewDdlSql,
   getPackageSourceSql,
   getCheckConstraintSql,
   SEARCHABLE_OBJECT_KINDS,
@@ -594,10 +594,7 @@ export class OracleRepository implements DatabaseRepository {
         return await this.fetchTableSql(conn, name);
       }
       if (type === "views") {
-        const detail = await this.fetchViewDetail(conn, name);
-        return detail.kind === "view"
-          ? (detail.text || `-- No SQL definition available for view ${name}`)
-          : `-- No SQL definition available for view ${name}`;
+        return await this.fetchViewSql(conn, name);
       }
       if (type === "ckts" || type === "ckcs") {
         const detail = await this.fetchCheckConstraintDetail(conn, type, name);
@@ -668,16 +665,29 @@ export class OracleRepository implements DatabaseRepository {
     return ddl.endsWith(";") ? ddl : `${ddl};`;
   }
 
+  private async fetchViewSql(conn: Connection, name: string): Promise<string> {
+    await this.configureMetadataTransforms(conn);
+
+    const result = await conn.execute(
+      getViewDdlSql(name),
+      {},
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+    const rows = (result.rows ?? []) as Array<{ DDL: string | null }>;
+    const ddl = rows[0]?.DDL?.trim();
+
+    if (!ddl) {
+      return `-- No SQL definition available for view ${name}`;
+    }
+
+    return ddl.endsWith(";") ? ddl : `${ddl};`;
+  }
+
   private async fetchViewDetail(conn: Connection, name: string): Promise<ObjectDetailResponse> {
-    const [textResult, colResult] = await Promise.all([
-      conn.execute(getViewTextSql(name), {}, { outFormat: oracledb.OUT_FORMAT_OBJECT }),
+    const [text, colResult] = await Promise.all([
+      this.fetchViewSql(conn, name),
       conn.execute(getViewColumnsSql(name), {}, { outFormat: oracledb.OUT_FORMAT_OBJECT }),
     ]);
-
-    const textRows = (textResult.rows ?? []) as Array<{ TEXT: string }>;
-    const text = textRows[0]?.TEXT
-      ? `CREATE OR REPLACE VIEW ${name} AS\n${textRows[0].TEXT}`
-      : "";
 
     const colRows = (colResult.rows ?? []) as Array<{
       COLUMN_NAME: string; DATA_TYPE: string; DATA_LENGTH: number;

@@ -86,16 +86,6 @@ export function getViewColumnsSql(name: string): string {
   `;
 }
 
-/** SQL para buscar definição de uma view */
-export function getViewTextSql(name: string): string {
-  return `
-    SELECT text
-    FROM all_views
-    WHERE view_name = '${name}'
-      AND owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
-  `;
-}
-
 /** SQL para buscar tanto spec quanto body de um package */
 export function getPackageSourceSql(name: string): string {
   return `
@@ -132,6 +122,13 @@ export function getCheckConstraintSql(name: string): string {
 export function getTableDdlSql(name: string): string {
   return `
     SELECT DBMS_METADATA.GET_DDL('TABLE', '${name}', SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')) AS DDL
+    FROM dual
+  `;
+}
+
+export function getViewDdlSql(name: string): string {
+  return `
+    SELECT DBMS_METADATA.GET_DDL('VIEW', '${name}', SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')) AS DDL
     FROM dual
   `;
 }

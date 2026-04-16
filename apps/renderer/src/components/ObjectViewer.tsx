@@ -11,6 +11,7 @@ import { SqlCodeEditor } from "./SqlCodeEditor";
 interface ObjectViewerProps {
   objectType: DatabaseObjectType;
   objectName: string;
+  onViewSql?: (type: DatabaseObjectType, name: string) => void;
 }
 
 const TYPE_LABELS: Record<DatabaseObjectType, string> = {
@@ -35,7 +36,7 @@ const TYPE_COLORS: Record<DatabaseObjectType, string> = {
   ckcs: "var(--info)",
 };
 
-export function ObjectViewer({ objectType, objectName }: ObjectViewerProps) {
+export function ObjectViewer({ objectType, objectName, onViewSql }: ObjectViewerProps) {
   const { detail, error, loading, reload } = useObjectDetail(objectType, objectName);
 
   // Determine display label based on actual source content
@@ -101,8 +102,8 @@ export function ObjectViewer({ objectType, objectName }: ObjectViewerProps) {
 
         {detail && !loading && (
           <>
-            {detail.kind === "table" && <TableView detail={detail} />}
-            {detail.kind === "view" && <ViewView detail={detail} />}
+            {detail.kind === "table" && <TableView detail={detail} onViewSql={onViewSql} />}
+            {detail.kind === "view" && <ViewView detail={detail} onViewSql={onViewSql} />}
             {detail.kind === "constraint" && <ConstraintView detail={detail} />}
             {detail.kind === "source" && <SourceView source={detail.source} />}
           </>
@@ -125,37 +126,16 @@ function detectSourceKind(source: string, objectType: DatabaseObjectType): strin
 
 // ─── Table view ─────────────────────────────────────────────────────
 
-function TableView({ detail }: { detail: Extract<ObjectDetailResponse, { kind: "table" }> }) {
-  const [sqlOpen, setSqlOpen] = useState(false);
-  const [sqlLoading, setSqlLoading] = useState(false);
-  const [sqlError, setSqlError] = useState<string | null>(null);
-  const [tableSql, setTableSql] = useState<string | null>(null);
-
+function TableView({
+  detail,
+  onViewSql,
+}: {
+  detail: Extract<ObjectDetailResponse, { kind: "table" }>;
+  onViewSql?: (type: DatabaseObjectType, name: string) => void;
+}) {
   const handleViewSql = useCallback(async () => {
-    if (sqlOpen) {
-      setSqlOpen(false);
-      return;
-    }
-
-    setSqlOpen(true);
-    if (tableSql || sqlLoading) return;
-
-    setSqlLoading(true);
-    setSqlError(null);
-
-    try {
-      const result = await window.gavadb.dbGetObjectSql("tables", detail.objectName);
-      if (result.success) {
-        setTableSql(result.data);
-      } else {
-        setSqlError(result.error.message + (result.error.details ? `\n${result.error.details}` : ""));
-      }
-    } catch (error) {
-      setSqlError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setSqlLoading(false);
-    }
-  }, [detail.objectName, sqlLoading, sqlOpen, tableSql]);
+    onViewSql?.("tables", detail.objectName);
+  }, [detail.objectName, onViewSql]);
 
   return (
     <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 16 }}>
@@ -180,56 +160,41 @@ function TableView({ detail }: { detail: Extract<ObjectDetailResponse, { kind: "
         <SectionHeader title="Primary Key" />
         <PrimaryKeySection primaryKey={detail.primaryKey} />
       </section>
-
-      {sqlOpen && (
-        <section>
-          <SectionHeader title="Table SQL" subtitle="CREATE TABLE definition" />
-          {sqlLoading && <EmptySection message="Loading SQL definition..." />}
-          {sqlError && !sqlLoading && <div style={errorBoxStyle}>{sqlError}</div>}
-          {!sqlLoading && !sqlError && tableSql && (
-            <div style={{ height: 320, border: "1px solid var(--border-subtle)" }}>
-              <SourceView source={tableSql} />
-            </div>
-          )}
-        </section>
-      )}
     </div>
   );
 }
 
 // ─── View view ──────────────────────────────────────────────────────
 
-function ViewView({ detail }: { detail: Extract<ObjectDetailResponse, { kind: "view" }> }) {
+function ViewView({
+  detail,
+  onViewSql,
+}: {
+  detail: Extract<ObjectDetailResponse, { kind: "view" }>;
+  onViewSql?: (type: DatabaseObjectType, name: string) => void;
+}) {
+  const handleViewSql = useCallback(async () => {
+    onViewSql?.("views", detail.objectName);
+  }, [detail.objectName, onViewSql]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 0, height: "100%" }}>
-      {detail.columns.length > 0 && (
-        <div style={{ padding: 14, borderBottom: "1px solid var(--border-subtle)" }}>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 10 }}>
-            {detail.columns.length} column(s)
-          </div>
+      <div style={{ padding: 14, borderBottom: "1px solid var(--border-subtle)" }}>
+        <SectionHeader
+          title="Columns"
+          subtitle={detail.columns.length > 0 ? `${detail.columns.length} column(s)` : "No columns found"}
+          actions={(
+            <button onClick={handleViewSql} style={secondaryActionButtonStyle}>
+              View SQL
+            </button>
+          )}
+        />
+        {detail.columns.length > 0 ? (
           <ColumnTable columns={detail.columns} />
-        </div>
-      )}
-
-      {detail.text ? (
-        <div style={{ flex: 1, overflow: "auto" }}>
-          <div style={{
-            padding: "6px 14px",
-            fontSize: 11,
-            color: "var(--text-muted)",
-            background: "var(--panel-bg)",
-            borderBottom: "1px solid var(--border-subtle)",
-            fontWeight: 600,
-          }}>
-            Definition
-          </div>
-          <SourceView source={detail.text} />
-        </div>
-      ) : (
-        <div style={centeredStyle}>
-          <span style={{ fontStyle: "italic" }}>No view definition available</span>
-        </div>
-      )}
+        ) : (
+          <EmptySection message="No columns found" />
+        )}
+      </div>
     </div>
   );
 }
