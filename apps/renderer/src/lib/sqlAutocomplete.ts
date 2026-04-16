@@ -16,6 +16,10 @@ export interface SqlAutocompleteTarget {
   anchor: number;
 }
 
+interface CalculateAutocompleteTargetOptions {
+  allowEmptyPrefix?: boolean;
+}
+
 const IDENTIFIER_CHAR = /[A-Za-z0-9_]/;
 
 export function detectCurrentWord(sql: string, cursor: number): SqlAutocompleteWord | null {
@@ -35,9 +39,33 @@ export function detectCurrentWord(sql: string, cursor: number): SqlAutocompleteW
   return { text: sql.slice(from, to), from, to };
 }
 
-export function calculateAutocompleteTarget(sql: string, cursor: number): SqlAutocompleteTarget | null {
+export function calculateAutocompleteTarget(
+  sql: string,
+  cursor: number,
+  options?: CalculateAutocompleteTargetOptions,
+): SqlAutocompleteTarget | null {
   const word = detectCurrentWord(sql, cursor);
-  if (!word || cursor < word.from || cursor > word.to) return null;
+  if (!word) {
+    if (!options?.allowEmptyPrefix) return null;
+
+    const qualifier = findQualifier(sql, cursor);
+    if (!qualifier) return null;
+
+    const emptyWord: SqlAutocompleteWord = { text: "", from: cursor, to: cursor };
+    const emptyPrefix: SqlAutocompleteWord = { text: "", from: cursor, to: cursor };
+
+    return {
+      word: emptyWord,
+      prefix: emptyPrefix,
+      qualifier,
+      replaceFrom: cursor,
+      replaceTo: cursor,
+      query: `${qualifier.text}.`,
+      anchor: cursor,
+    };
+  }
+
+  if (cursor < word.from || cursor > word.to) return null;
 
   const prefix: SqlAutocompleteWord = {
     text: sql.slice(word.from, cursor),
@@ -45,7 +73,7 @@ export function calculateAutocompleteTarget(sql: string, cursor: number): SqlAut
     to: cursor,
   };
 
-  if (!prefix.text) return null;
+  if (!prefix.text && !options?.allowEmptyPrefix) return null;
 
   const qualifier = findQualifier(sql, word.from);
   const query = qualifier ? `${qualifier.text}.${prefix.text}` : prefix.text;
@@ -78,7 +106,7 @@ export function resolveAutocompleteTarget(
   cursor: number,
   fallbackTarget: SqlAutocompleteTarget | null,
 ): SqlAutocompleteTarget | null {
-  const currentTarget = calculateAutocompleteTarget(sql, cursor);
+  const currentTarget = calculateAutocompleteTarget(sql, cursor, { allowEmptyPrefix: true });
   if (!fallbackTarget) {
     return currentTarget;
   }

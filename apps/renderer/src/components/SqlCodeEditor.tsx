@@ -37,11 +37,13 @@ interface AutocompleteState {
   open: boolean;
   loading: boolean;
   items: SqlAutocompleteItem[];
+  sourceItems: SqlAutocompleteItem[];
   selectedIndex: number;
   query: string;
   top: number;
   left: number;
   target: SqlAutocompleteTarget | null;
+  kind: "object" | "column" | null;
 }
 
 type SqlAutocompleteItem =
@@ -330,21 +332,25 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
     open: false,
     loading: false,
     items: [],
+    sourceItems: [],
     selectedIndex: 0,
     query: "",
     top: 0,
     left: 0,
     target: null,
+    kind: null,
   });
   const [autocomplete, setAutocomplete] = useState<AutocompleteState>({
     open: false,
     loading: false,
     items: [],
+    sourceItems: [],
     selectedIndex: 0,
     query: "",
     top: 0,
     left: 0,
     target: null,
+    kind: null,
   });
   autocompleteRef.current = autocomplete;
 
@@ -407,11 +413,13 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
       open: false,
       loading: false,
       items: [],
+      sourceItems: [],
       selectedIndex: 0,
       query: "",
       top: 0,
       left: 0,
       target: null,
+      kind: null,
     } : current);
   }
 
@@ -451,7 +459,7 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
 
     const cursor = view.state.selection.main.head;
     const document = view.state.doc.toString();
-    const target = calculateAutocompleteTarget(document, cursor);
+    const target = calculateAutocompleteTarget(document, cursor, { allowEmptyPrefix: true });
     if (!target) {
       closeAutocomplete();
       return true;
@@ -462,6 +470,11 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
     const left = coords && containerRect ? coords.left - containerRect.left : 12;
     const top = coords && containerRect ? coords.bottom - containerRect.top + 6 : 36;
     const context = detectSqlAutocompleteContext(document, cursor, target);
+    if (context.kind === "object" && !target.prefix.text) {
+      closeAutocomplete();
+      return true;
+    }
+
     const query = context.kind === "column" ? context.prefix : context.query;
     const requestId = ++autocompleteRequestRef.current;
 
@@ -469,11 +482,13 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
       open: true,
       loading: true,
       items: [],
+      sourceItems: [],
       selectedIndex: 0,
       query,
       top,
       left,
       target,
+      kind: context.kind,
     });
     autocompleteItemRefs.current = [];
 
@@ -481,29 +496,62 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
       const items = context.kind === "column"
         ? (await columnSearchFn({
           tables: context.tables,
-          prefix: context.prefix,
-          limit: 50,
+          prefix: "",
+          limit: 1000,
         })).map((value: SqlColumnSuggestion) => ({ kind: "column", value } satisfies SqlAutocompleteItem))
         : (await objectSearchFn(context.query, 20)).map((value: DatabaseObjectSuggestion) => ({ kind: "object", value } satisfies SqlAutocompleteItem));
       if (autocompleteRequestRef.current !== requestId) return true;
 
       setAutocomplete((current) => {
-        if (!current.open || current.query !== query) return current;
+        if (!current.open || current.kind !== context.kind) return current;
+        if (context.kind === "object" && current.query !== query) return current;
+        const visibleItems = context.kind === "column" ? filterColumnAutocompleteItems(items, current.query) : items;
         return {
           ...current,
           loading: false,
-          items,
+          items: visibleItems,
+          sourceItems: items,
           selectedIndex: 0,
         };
       });
     } catch {
       if (autocompleteRequestRef.current !== requestId) return true;
       setAutocomplete((current) => {
-        if (!current.open || current.query !== query) return current;
-        return { ...current, loading: false, items: [], selectedIndex: 0 };
+        if (!current.open || current.kind !== context.kind) return current;
+        if (context.kind === "object" && current.query !== query) return current;
+        return { ...current, loading: false, items: [], sourceItems: [], selectedIndex: 0 };
       });
     }
 
+    return true;
+  }
+
+  function refreshColumnAutocompleteForDocument(view: EditorView): boolean {
+    const currentAutocomplete = autocompleteRef.current;
+    if (!currentAutocomplete.open || currentAutocomplete.kind !== "column" || !currentAutocomplete.target) {
+      return false;
+    }
+
+    const cursor = view.state.selection.main.head;
+    const document = view.state.doc.toString();
+    const target = calculateAutocompleteTarget(document, cursor, { allowEmptyPrefix: true });
+    if (!target || target.qualifier?.text !== currentAutocomplete.target.qualifier?.text) {
+      closeAutocomplete();
+      return true;
+    }
+
+    const query = target.prefix.text;
+    const items = filterColumnAutocompleteItems(currentAutocomplete.sourceItems, query);
+    setAutocomplete((current) => {
+      if (!current.open || current.kind !== "column") return current;
+      return {
+        ...current,
+        items,
+        query,
+        target,
+        selectedIndex: Math.min(current.selectedIndex, Math.max(items.length - 1, 0)),
+      };
+    });
     return true;
   }
 
@@ -663,7 +711,10 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
       highlightCompartmentRef.current.of(buildHighlightStyle(themeConfig)),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
-          closeAutocomplete();
+          const keptColumnAutocompleteOpen = refreshColumnAutocompleteForDocument(update.view);
+          if (!keptColumnAutocompleteOpen) {
+            closeAutocomplete();
+          }
           onChangeRef.current?.(update.state.doc.toString());
           scheduleParsedStatementsRefresh(update.view);
         }
@@ -819,13 +870,13 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
         >
           {autocomplete.loading && (
             <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-muted)" }}>
-              Searching objects...
+              {autocomplete.kind === "column" ? "Searching columns..." : "Searching objects..."}
             </div>
           )}
 
           {!autocomplete.loading && autocomplete.items.length === 0 && (
             <div style={{ padding: "8px 10px", fontSize: 11, color: "var(--text-muted)" }}>
-              No objects found for <span style={{ color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>{autocomplete.query}</span>
+              No {autocomplete.kind === "column" ? "columns" : "objects"} found for <span style={{ color: "var(--text-primary)", fontFamily: "var(--font-ui)" }}>{autocomplete.query}</span>
             </div>
           )}
 
@@ -885,6 +936,20 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
 
 function getAutocompleteInsertText(item: SqlAutocompleteItem): string {
   return item.value.name;
+}
+
+function filterColumnAutocompleteItems(items: SqlAutocompleteItem[], query: string): SqlAutocompleteItem[] {
+  const normalizedQuery = normalizeAutocompleteText(query);
+  if (!normalizedQuery) return items;
+
+  return items.filter((item) => {
+    if (item.kind !== "column") return false;
+    return normalizeAutocompleteText(item.value.name).includes(normalizedQuery);
+  });
+}
+
+function normalizeAutocompleteText(value: string): string {
+  return value.trim().replace(/^"+|"+$/g, "").toUpperCase();
 }
 
 function getAutocompleteItemKey(item: SqlAutocompleteItem): string {

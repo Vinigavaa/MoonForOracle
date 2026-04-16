@@ -1107,7 +1107,7 @@ function clampObjectSearchLimit(limit?: number): number {
 
 function clampColumnSearchLimit(limit?: number): number {
   if (!limit || !Number.isFinite(limit)) return 50;
-  return Math.max(1, Math.min(Math.floor(limit), 100));
+  return Math.max(1, Math.min(Math.floor(limit), 1000));
 }
 
 function parseObjectSearchPrefix(prefix: string): { schema: string | null; objectPrefix: string } {
