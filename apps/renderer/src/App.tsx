@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import type { DatabaseObjectType, ConnectionConfig, SavedConnection } from "@gavadb/types";
+import type { UpdaterStatus } from "@gavadb/ipc-contract";
 import { Toolbar } from "./components/Toolbar";
 import { Sidebar } from "./components/Sidebar";
 import { TabPanel, type Tab } from "./components/TabPanel";
@@ -8,6 +9,7 @@ import { ObjectViewer } from "./components/ObjectViewer";
 import { ObjectSqlViewer } from "./components/ObjectSqlViewer";
 import { ThemePreferencesPanel } from "./components/ThemePreferencesPanel";
 import { ConnectionDialog } from "./components/ConnectionDialog";
+import { AutoUpdateDialog } from "./components/AutoUpdateDialog";
 import { useConnection } from "./hooks/useConnection";
 import { useSavedConnections } from "./hooks/useSavedConnections";
 import { useToastContext } from "./hooks/ToastContext";
@@ -59,6 +61,8 @@ export function App() {
   const [objectTabs, setObjectTabs] = useState<ObjectTab[]>([]);
   const [objectSqlTabs, setObjectSqlTabs] = useState<ObjectSqlTab[]>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => loadSidebarPreferences().collapsed);
+  const [updaterStatus, setUpdaterStatus] = useState<UpdaterStatus | null>(null);
+  const dismissedUpdateVersionRef = useRef<string | null>(null);
   const executeTriggerRef = useRef<(() => void) | null>(null);
   const executeAllTriggerRef = useRef<(() => void) | null>(null);
   const sqlEditorRef = useRef<SqlEditorHandle | null>(null);
@@ -92,6 +96,51 @@ export function App() {
     });
     return cleanup;
   }, [toast, showConnModal]);
+
+  useEffect(() => {
+    if (!window.gavadb) return;
+
+    return window.gavadb.onUpdaterStatusChanged((status) => {
+      if (status.kind === "checking") {
+        console.info("[Updater] Checking for updates");
+        return;
+      }
+
+      if (status.kind === "not-available") {
+        console.info("[Updater] App is up to date", status.currentVersion);
+        return;
+      }
+
+      if (status.kind === "available" && dismissedUpdateVersionRef.current === status.version) {
+        return;
+      }
+
+      setUpdaterStatus(status);
+    });
+  }, []);
+
+  const handleDismissUpdater = useCallback(() => {
+    if (updaterStatus?.kind === "available" || updaterStatus?.kind === "downloaded") {
+      dismissedUpdateVersionRef.current = updaterStatus.version;
+    }
+    setUpdaterStatus(null);
+  }, [updaterStatus]);
+
+  const handleDownloadUpdate = useCallback(async () => {
+    const result = await window.gavadb.updaterDownload();
+    if (!result.success) {
+      toast.error(result.error.message);
+      setUpdaterStatus({ kind: "error", message: result.error.message });
+    }
+  }, [toast]);
+
+  const handleInstallUpdate = useCallback(async () => {
+    const result = await window.gavadb.updaterQuitAndInstall();
+    if (!result.success) {
+      toast.error(result.error.message);
+      setUpdaterStatus({ kind: "error", message: result.error.message });
+    }
+  }, [toast]);
 
   useEffect(() => {
     if (!preferencesOpen) return undefined;
@@ -402,6 +451,13 @@ export function App() {
         connecting={isConnecting}
         editingConnection={editingConnection}
         editingPassword={editingPassword}
+      />
+
+      <AutoUpdateDialog
+        status={updaterStatus}
+        onDownload={handleDownloadUpdate}
+        onInstall={handleInstallUpdate}
+        onDismiss={handleDismissUpdater}
       />
     </div>
   );

@@ -30,8 +30,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build renderer
-        run: pnpm --filter @gavadb/renderer run build
+      - name: Validate release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $package = Get-Content apps/desktop/package.json | ConvertFrom-Json
+          $expected = "v$($package.version)"
+          $actual = "${{ github.ref_name }}"
+          if ($actual -ne $expected) {
+            throw "Release tag '$actual' must match apps/desktop/package.json version '$expected'."
+          }
 
       - name: Build & publish desktop installer
         env:

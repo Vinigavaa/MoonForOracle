@@ -35,6 +35,7 @@
   "build": {
     "appId": "com.moonfororacle.app",
     "productName": "Moon For Oracle",
+    "artifactName": "MoonForOracle-${version}-${os}-${arch}.${ext}",
     "directories": {
       "output": "release"
     },
@@ -61,15 +62,21 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "perMachine": false
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Moon For Oracle",
+      "deleteAppDataOnUninstall": false
     },
     "asar": true,
     "npmRebuild": true,
-    "publish": {
-      "provider": "github",
-      "owner": "Vinigavaa",
-      "repo": "MoonForOracle",
-      "releaseType": "release"
-    }
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Vinigavaa",
+        "repo": "MoonForOracle",
+        "releaseType": "release"
+      }
+    ]
   }
 }
