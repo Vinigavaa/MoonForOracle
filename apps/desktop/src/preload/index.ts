@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
-import { IPC_CHANNELS } from "@gavadb/ipc-contract";
+import { IPC_CHANNELS, type UpdaterStatus } from "@gavadb/ipc-contract";
 import type {
   AppError,
   ConnectionConfig,
@@ -133,5 +133,19 @@ contextBridge.exposeInMainWorld("gavadb", {
     const handler = (_e: IpcRendererEvent, isMaximized: boolean) => cb(isMaximized);
     ipcRenderer.on(IPC_CHANNELS.WINDOW_MAXIMIZED_CHANGED, handler);
     return () => { ipcRenderer.removeListener(IPC_CHANNELS.WINDOW_MAXIMIZED_CHANGED, handler); };
+  },
+
+  updaterCheck: () => ipcRenderer.invoke(IPC_CHANNELS.UPDATER_CHECK),
+
+  updaterDownload: () => ipcRenderer.invoke(IPC_CHANNELS.UPDATER_DOWNLOAD),
+
+  updaterQuitAndInstall: () => ipcRenderer.invoke(IPC_CHANNELS.UPDATER_QUIT_AND_INSTALL),
+
+  updaterGetCurrentVersion: () => ipcRenderer.invoke(IPC_CHANNELS.UPDATER_GET_CURRENT_VERSION),
+
+  onUpdaterStatusChanged: (cb: (status: UpdaterStatus) => void) => {
+    const handler = (_e: IpcRendererEvent, status: UpdaterStatus) => cb(status);
+    ipcRenderer.on(IPC_CHANNELS.UPDATER_STATUS_CHANGED, handler);
+    return () => { ipcRenderer.removeListener(IPC_CHANNELS.UPDATER_STATUS_CHANGED, handler); };
   },
 });

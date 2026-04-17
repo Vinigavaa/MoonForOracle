@@ -1,6 +1,7 @@
 import { app, BrowserWindow, screen } from "electron";
 import path from "node:path";
 import { registerIpcHandlers } from "../ipc/handlers";
+import { registerAutoUpdater } from "../services/updater/auto-updater";
 
 const IS_DEV = !app.isPackaged;
 const RENDERER_DEV_URL = "http://localhost:5173";
@@ -35,6 +36,7 @@ function createWindow(): BrowserWindow {
   win.once("ready-to-show", () => win.show());
 
   registerIpcHandlers(win);
+  registerAutoUpdater(win);
 
   if (IS_DEV) {
     win.loadURL(RENDERER_DEV_URL);

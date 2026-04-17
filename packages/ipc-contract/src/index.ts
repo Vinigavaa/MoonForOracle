@@ -62,6 +62,10 @@ export interface IpcMainHandlers {
   "window:toggle-maximize": () => Promise<IpcResult<boolean>>;
   "window:close": () => Promise<IpcResult<void>>;
   "window:is-maximized": () => Promise<IpcResult<boolean>>;
+  "updater:check": () => Promise<IpcResult<UpdateCheckResult>>;
+  "updater:download": () => Promise<IpcResult<void>>;
+  "updater:quit-and-install": () => Promise<IpcResult<void>>;
+  "updater:get-current-version": () => Promise<IpcResult<string>>;
 }
 
 /** Canais que o main process pode emitir para o renderer (win.webContents.send) */
@@ -71,7 +75,27 @@ export interface IpcRendererEvents {
   "db:error": (error: AppError) => void;
   "db:export-progress": (progress: QueryExportProgress) => void;
   "window:maximized-changed": (isMaximized: boolean) => void;
+  "updater:status-changed": (status: UpdaterStatus) => void;
 }
+
+/** Resultado da checagem manual de atualização */
+export interface UpdateCheckResult {
+  available: boolean;
+  currentVersion: string;
+  latestVersion?: string;
+  releaseNotes?: string;
+  releaseDate?: string;
+}
+
+/** Estados do updater emitidos para o renderer */
+export type UpdaterStatus =
+  | { kind: "idle" }
+  | { kind: "checking" }
+  | { kind: "not-available"; currentVersion: string }
+  | { kind: "available"; version: string; releaseNotes?: string }
+  | { kind: "downloading"; percent: number; bytesPerSecond: number; transferred: number; total: number }
+  | { kind: "downloaded"; version: string }
+  | { kind: "error"; message: string };
 
 /** Nomes dos canais IPC — evita strings mágicas espalhadas pelo código */
 export const IPC_CHANNELS = {
@@ -109,6 +133,11 @@ export const IPC_CHANNELS = {
   WINDOW_CLOSE: "window:close",
   WINDOW_IS_MAXIMIZED: "window:is-maximized",
   WINDOW_MAXIMIZED_CHANGED: "window:maximized-changed",
+  UPDATER_CHECK: "updater:check",
+  UPDATER_DOWNLOAD: "updater:download",
+  UPDATER_QUIT_AND_INSTALL: "updater:quit-and-install",
+  UPDATER_GET_CURRENT_VERSION: "updater:get-current-version",
+  UPDATER_STATUS_CHANGED: "updater:status-changed",
 } as const;
 
 /** API exposta ao renderer via contextBridge (window.gavadb) */
@@ -147,4 +176,9 @@ export interface GavaDbApi {
   onError: (cb: (error: AppError) => void) => () => void;
   onExportProgress: (cb: (progress: QueryExportProgress) => void) => () => void;
   onWindowMaximizedChanged: (cb: (isMaximized: boolean) => void) => () => void;
+  updaterCheck: () => Promise<IpcResult<UpdateCheckResult>>;
+  updaterDownload: () => Promise<IpcResult<void>>;
+  updaterQuitAndInstall: () => Promise<IpcResult<void>>;
+  updaterGetCurrentVersion: () => Promise<IpcResult<string>>;
+  onUpdaterStatusChanged: (cb: (status: UpdaterStatus) => void) => () => void;
 }

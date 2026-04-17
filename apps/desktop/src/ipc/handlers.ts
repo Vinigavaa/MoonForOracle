@@ -22,6 +22,12 @@ import type {
 import * as useCases from "../use-cases";
 import { SavedConnectionsStore } from "../lib/saved-connections-store";
 import { QueryExportService } from "../services/export/query-export-service";
+import {
+  checkForUpdates,
+  downloadUpdate,
+  quitAndInstall,
+  getCurrentVersion,
+} from "../services/updater/auto-updater";
 
 const repo: DatabaseRepository = new OracleRepository({
   configDir: findTnsAdmin(),
@@ -155,6 +161,36 @@ export function registerIpcHandlers(win: BrowserWindow): void {
 
   ipcMain.handle(IPC_CHANNELS.WINDOW_IS_MAXIMIZED, async () => {
     return ok(win.isMaximized());
+  });
+
+  ipcMain.handle(IPC_CHANNELS.UPDATER_CHECK, async () => {
+    try {
+      return ok(await checkForUpdates());
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.UPDATER_CHECK, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.UPDATER_DOWNLOAD, async () => {
+    try {
+      await downloadUpdate();
+      return ok(undefined);
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.UPDATER_DOWNLOAD, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.UPDATER_QUIT_AND_INSTALL, async () => {
+    try {
+      quitAndInstall();
+      return ok(undefined);
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.UPDATER_QUIT_AND_INSTALL, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.UPDATER_GET_CURRENT_VERSION, async () => {
+    return ok(getCurrentVersion());
   });
 
   ipcMain.handle(IPC_CHANNELS.DB_CONNECT, async (_event, config: ConnectionConfig) => {

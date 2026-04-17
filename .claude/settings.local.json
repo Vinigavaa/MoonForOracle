@@ -37,7 +37,10 @@
       "Bash(pnpm --filter @gavadb/renderer typecheck)",
       "Bash(cat:*)",
       "Bash(pnpm --filter @gavadb/renderer build)",
-      "Bash(pnpm --filter @gavadb/desktop package:installer)"
+      "Bash(pnpm --filter @gavadb/desktop package:installer)",
+      "Bash(pnpm --filter @gavadb/desktop add electron-updater electron-log)",
+      "Bash(pnpm --filter @gavadb/desktop run typecheck)",
+      "Bash(pnpm --filter @gavadb/ipc-contract run build)"
     ]
   }
 }
