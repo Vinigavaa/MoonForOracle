@@ -31,6 +31,7 @@ interface SqlCodeEditorProps {
   disabled?: boolean;
   readOnly?: boolean;
   placeholder?: string;
+  showScopeLines?: boolean;
 }
 
 interface AutocompleteState {
@@ -299,6 +300,7 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
   disabled,
   readOnly,
   placeholder,
+  showScopeLines = true,
 }, ref) {
   countRender("SqlCodeEditor");
   const { theme: themeConfig } = useEditorTheme();
@@ -706,7 +708,7 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
       highlightActiveLine(),
       highlightActiveLineGutter(),
       search({ top: true }),
-      scopeCompartmentRef.current.of(sqlScopeExtension({ color: themeConfig.scopeLineColor, opacity: themeConfig.scopeLineOpacity })),
+      scopeCompartmentRef.current.of(showScopeLines ? sqlScopeExtension({ color: themeConfig.scopeLineColor, opacity: themeConfig.scopeLineOpacity }) : []),
       themeCompartmentRef.current.of(buildCmTheme(themeConfig)),
       highlightCompartmentRef.current.of(buildHighlightStyle(themeConfig)),
       EditorView.updateListener.of((update) => {
@@ -801,10 +803,10 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
       effects: [
         themeCompartmentRef.current.reconfigure(buildCmTheme(themeConfig)),
         highlightCompartmentRef.current.reconfigure(buildHighlightStyle(themeConfig)),
-        scopeCompartmentRef.current.reconfigure(sqlScopeExtension({ color: themeConfig.scopeLineColor, opacity: themeConfig.scopeLineOpacity })),
+        scopeCompartmentRef.current.reconfigure(showScopeLines ? sqlScopeExtension({ color: themeConfig.scopeLineColor, opacity: themeConfig.scopeLineOpacity }) : []),
       ],
     });
-  }, [themeConfig]);
+  }, [showScopeLines, themeConfig]);
 
   useEffect(() => {
     const view = viewRef.current;

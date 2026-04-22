@@ -19,6 +19,22 @@ function formatSpeed(value: number): string {
   return `${formatBytes(value)}/s`;
 }
 
+function formatReleaseNotes(value: string): string {
+  return value
+    .replace(/<\/(p|div|li|h[1-6])>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<li>/gi, "- ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export function AutoUpdateDialog({ status, onDownload, onInstall, onDismiss }: AutoUpdateDialogProps) {
   if (!status || status.kind === "idle" || status.kind === "checking" || status.kind === "not-available") {
     return null;
@@ -52,7 +68,7 @@ export function AutoUpdateDialog({ status, onDownload, onInstall, onDismiss }: A
             <p style={bodyStyle}>
               A versao {status.version} esta disponivel para instalacao. Voce pode baixar agora e continuar usando o app enquanto o download acontece.
             </p>
-            {status.releaseNotes && <pre style={releaseNotesStyle}>{status.releaseNotes}</pre>}
+            {status.releaseNotes && <pre style={releaseNotesStyle}>{formatReleaseNotes(status.releaseNotes)}</pre>}
             <div style={actionsStyle}>
               <button type="button" onClick={onDismiss}>
                 Depois

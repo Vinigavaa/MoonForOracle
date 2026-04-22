@@ -371,6 +371,7 @@ function SourceView({ source }: { source: string }) {
       <SqlCodeEditor
         value={source}
         readOnly
+        showScopeLines={false}
       />
     </div>
   );
