@@ -22,6 +22,7 @@ import type {
 import * as useCases from "../use-cases";
 import { SavedConnectionsStore } from "../lib/saved-connections-store";
 import { QueryExportService } from "../services/export/query-export-service";
+import { WorkspaceService } from "../services/workspace/workspace-service";
 import {
   checkForUpdates,
   downloadUpdate,
@@ -101,6 +102,18 @@ function fail(error: AppError): IpcResult<never> {
 
 function toAppError(err: unknown): AppError {
   if (typeof err === "object" && err !== null && "code" in err && "message" in err) {
+    const nodeError = err as { code: string; message: string };
+    if (nodeError.code === "EACCES" || nodeError.code === "EPERM") {
+      return { code: "PERMISSION_DENIED", message: nodeError.message };
+    }
+    if (nodeError.code === "ENOENT") {
+      return { code: "OBJECT_NOT_FOUND", message: nodeError.message };
+    }
+    if (nodeError.code === "EEXIST" || nodeError.code === "ENOTEMPTY") {
+      return { code: "PATH_CONFLICT", message: nodeError.message };
+    }
+  }
+  if (typeof err === "object" && err !== null && "code" in err && "message" in err) {
     return err as AppError;
   }
   return { code: "UNKNOWN", message: String(err) };
@@ -122,6 +135,8 @@ function emitWindowMaximizedState(win: BrowserWindow): void {
 }
 
 export function registerIpcHandlers(win: BrowserWindow): void {
+  const workspaceService = new WorkspaceService(app.getPath("userData"), app.getPath("documents"));
+
   win.on("maximize", () => emitWindowMaximizedState(win));
   win.on("unmaximize", () => emitWindowMaximizedState(win));
   win.on("restore", () => emitWindowMaximizedState(win));
@@ -137,6 +152,79 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       return ok(targetPath);
     } catch (err) {
       return fail(logIpcError(IPC_CHANNELS.FILE_SAVE, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.WORKSPACE_GET_TREE, async () => {
+    try {
+      return ok(await workspaceService.getTree());
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.WORKSPACE_GET_TREE, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.WORKSPACE_OPEN_FOLDER, async () => {
+    try {
+      const result = await dialog.showOpenDialog(win, {
+        title: "Open workspace folder",
+        properties: ["openDirectory"],
+      });
+
+      if (result.canceled || !result.filePaths[0]) {
+        return ok(null);
+      }
+
+      return ok(await workspaceService.setRoot(result.filePaths[0]));
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.WORKSPACE_OPEN_FOLDER, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.WORKSPACE_CREATE_FOLDER, async (_event, request) => {
+    try {
+      return ok(await workspaceService.createFolder(request));
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.WORKSPACE_CREATE_FOLDER, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.WORKSPACE_CREATE_FILE, async (_event, request) => {
+    try {
+      return ok(await workspaceService.createFile(request));
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.WORKSPACE_CREATE_FILE, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.WORKSPACE_RENAME_ITEM, async (_event, request) => {
+    try {
+      return ok(await workspaceService.renameItem(request));
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.WORKSPACE_RENAME_ITEM, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.WORKSPACE_MOVE_ITEM, async (_event, request) => {
+    try {
+      return ok(await workspaceService.moveItem(request));
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.WORKSPACE_MOVE_ITEM, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.WORKSPACE_DELETE_ITEM, async (_event, request) => {
+    try {
+      return ok(await workspaceService.deleteItem(request));
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.WORKSPACE_DELETE_ITEM, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.WORKSPACE_READ_FILE, async (_event, request) => {
+    try {
+      return ok(await workspaceService.readFile(request));
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.WORKSPACE_READ_FILE, err));
     }
   });
 

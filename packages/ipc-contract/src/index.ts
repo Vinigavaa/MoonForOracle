@@ -29,11 +29,27 @@ import type {
   SavedConnection,
   SaveConnectionRequest,
   SavedConnectionWithPassword,
+  WorkspaceCreateItemRequest,
+  WorkspaceDeleteItemRequest,
+  WorkspaceMoveItemRequest,
+  WorkspaceOperationResult,
+  WorkspaceReadFileRequest,
+  WorkspaceReadFileResponse,
+  WorkspaceRenameItemRequest,
+  WorkspaceTree,
 } from "@gavadb/types";
 
 /** Canais que o renderer pode invocar no main process (ipcRenderer.invoke) */
 export interface IpcMainHandlers {
   "file:save": (request: { content: string; filePath?: string }) => Promise<IpcResult<string | null>>;
+  "workspace:get-tree": () => Promise<IpcResult<WorkspaceTree>>;
+  "workspace:open-folder": () => Promise<IpcResult<WorkspaceTree | null>>;
+  "workspace:create-folder": (request: WorkspaceCreateItemRequest) => Promise<IpcResult<WorkspaceOperationResult>>;
+  "workspace:create-file": (request: WorkspaceCreateItemRequest) => Promise<IpcResult<WorkspaceOperationResult>>;
+  "workspace:rename-item": (request: WorkspaceRenameItemRequest) => Promise<IpcResult<WorkspaceOperationResult>>;
+  "workspace:move-item": (request: WorkspaceMoveItemRequest) => Promise<IpcResult<WorkspaceOperationResult>>;
+  "workspace:delete-item": (request: WorkspaceDeleteItemRequest) => Promise<IpcResult<WorkspaceOperationResult>>;
+  "workspace:read-file": (request: WorkspaceReadFileRequest) => Promise<IpcResult<WorkspaceReadFileResponse>>;
   "db:connect": (config: ConnectionConfig) => Promise<IpcResult<void>>;
   "db:disconnect": () => Promise<IpcResult<void>>;
   "db:execute-query": (request: SqlExecutionRequest) => Promise<IpcResult<SqlExecutionResponse>>;
@@ -100,6 +116,14 @@ export type UpdaterStatus =
 /** Nomes dos canais IPC — evita strings mágicas espalhadas pelo código */
 export const IPC_CHANNELS = {
   FILE_SAVE: "file:save",
+  WORKSPACE_GET_TREE: "workspace:get-tree",
+  WORKSPACE_OPEN_FOLDER: "workspace:open-folder",
+  WORKSPACE_CREATE_FOLDER: "workspace:create-folder",
+  WORKSPACE_CREATE_FILE: "workspace:create-file",
+  WORKSPACE_RENAME_ITEM: "workspace:rename-item",
+  WORKSPACE_MOVE_ITEM: "workspace:move-item",
+  WORKSPACE_DELETE_ITEM: "workspace:delete-item",
+  WORKSPACE_READ_FILE: "workspace:read-file",
   DB_CONNECT: "db:connect",
   DB_DISCONNECT: "db:disconnect",
   DB_EXECUTE_QUERY: "db:execute-query",
@@ -143,6 +167,14 @@ export const IPC_CHANNELS = {
 /** API exposta ao renderer via contextBridge (window.gavadb) */
 export interface GavaDbApi {
   saveFile: (content: string, filePath?: string) => Promise<IpcResult<string | null>>;
+  workspaceGetTree: () => Promise<IpcResult<WorkspaceTree>>;
+  workspaceOpenFolder: () => Promise<IpcResult<WorkspaceTree | null>>;
+  workspaceCreateFolder: (request: WorkspaceCreateItemRequest) => Promise<IpcResult<WorkspaceOperationResult>>;
+  workspaceCreateFile: (request: WorkspaceCreateItemRequest) => Promise<IpcResult<WorkspaceOperationResult>>;
+  workspaceRenameItem: (request: WorkspaceRenameItemRequest) => Promise<IpcResult<WorkspaceOperationResult>>;
+  workspaceMoveItem: (request: WorkspaceMoveItemRequest) => Promise<IpcResult<WorkspaceOperationResult>>;
+  workspaceDeleteItem: (request: WorkspaceDeleteItemRequest) => Promise<IpcResult<WorkspaceOperationResult>>;
+  workspaceReadFile: (request: WorkspaceReadFileRequest) => Promise<IpcResult<WorkspaceReadFileResponse>>;
   dbConnect: (config: ConnectionConfig) => Promise<IpcResult<void>>;
   dbDisconnect: () => Promise<IpcResult<void>>;
   dbExecuteQuery: (request: SqlExecutionRequest) => Promise<IpcResult<SqlExecutionResponse>>;

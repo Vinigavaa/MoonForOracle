@@ -43,3 +43,17 @@ export type {
 } from "./export";
 export type { AppError, AppErrorCode } from "./error";
 export type { IpcResult } from "./ipc-result";
+export type {
+  WorkspaceItemType,
+  WorkspaceFileNode,
+  WorkspaceFolderNode,
+  WorkspaceNode,
+  WorkspaceTree,
+  WorkspaceOperationResult,
+  WorkspaceCreateItemRequest,
+  WorkspaceRenameItemRequest,
+  WorkspaceMoveItemRequest,
+  WorkspaceDeleteItemRequest,
+  WorkspaceReadFileRequest,
+  WorkspaceReadFileResponse,
+} from "./workspace";

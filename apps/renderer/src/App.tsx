@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import type { DatabaseObjectType, ConnectionConfig, SavedConnection } from "@gavadb/types";
+import type { DatabaseObjectType, ConnectionConfig, SavedConnection, WorkspaceReadFileResponse } from "@gavadb/types";
 import type { UpdaterStatus } from "@gavadb/ipc-contract";
 import { Toolbar } from "./components/Toolbar";
 import { Sidebar } from "./components/Sidebar";
@@ -328,6 +328,11 @@ export function App() {
     setActiveTab(tabId);
   }, []);
 
+  const handleOpenWorkspaceFile = useCallback((file: WorkspaceReadFileResponse) => {
+    setActiveTab(SQL_TAB_ID);
+    sqlEditorRef.current?.openFile(file);
+  }, []);
+
   const handleTabClose = useCallback((id: string) => {
     if (id === SQL_TAB_ID) return;
     setObjectTabs((prev) => {
@@ -385,6 +390,7 @@ export function App() {
           collapsed={sidebarCollapsed}
           isConnected={isConnected}
           onObjectSelect={handleObjectSelect}
+          onOpenWorkspaceFile={handleOpenWorkspaceFile}
           savedConnections={savedConns.connections}
           activeConnectionId={activeConnectionId}
           connectingId={connectingId}

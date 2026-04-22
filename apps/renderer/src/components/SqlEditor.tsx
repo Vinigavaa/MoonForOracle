@@ -7,6 +7,7 @@ import type {
   BindParameterValue,
   SearchColumnsRequest,
   QueryExportColumn,
+  WorkspaceReadFileResponse,
 } from "@gavadb/types";
 import type { DatabaseObjectType } from "@gavadb/types";
 import { generateId, extractBindParameters } from "@gavadb/utils";
@@ -86,6 +87,7 @@ interface SqlEditorProps {
 
 export interface SqlEditorHandle {
   focus: () => void;
+  openFile: (file: WorkspaceReadFileResponse) => void;
 }
 
 const MIN_EDITOR_HEIGHT = 80;
@@ -126,7 +128,7 @@ export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(function Sq
   const activeEditorTab = editorTabs.find((t) => t.id === activeTabId) ?? editorTabs[0];
   const activeResultTab = resultTabs[activeTabId] ?? createResultState();
   const displayTabs = useMemo(
-    () => editorTabs.map((tab, index) => ({ ...tab, title: `Query ${index + 1}` })),
+    () => editorTabs.map((tab, index) => ({ ...tab, title: tab.filePath ? getFileName(tab.filePath) : `Query ${index + 1}` })),
     [editorTabs],
   );
 
@@ -147,7 +149,26 @@ export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(function Sq
 
   useImperativeHandle(ref, () => ({
     focus: focusEditor,
-  }), [focusEditor]);
+    openFile: (file) => {
+      const existing = editorTabs.find((tab) => tab.filePath === file.path);
+      if (existing) {
+        setActiveTabId(existing.id);
+        focusEditor();
+        return;
+      }
+
+      const tab: TabEditorState = {
+        id: generateId(),
+        sql: file.content,
+        filePath: file.path,
+        currentExecutionSnapshot: null,
+      };
+      setEditorTabs((prev) => [...prev, tab]);
+      setResultTabs((prev) => ({ ...prev, [tab.id]: createResultState() }));
+      setActiveTabId(tab.id);
+      focusEditor();
+    },
+  }), [editorTabs, focusEditor]);
 
   const recoverUiState = useCallback((tabId: string, reason: string, restoreFocus = false) => {
     setResultTabs((prev) => {
@@ -826,7 +847,7 @@ export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(function Sq
             ? "Type your SQL query here..."
             : "Connect to a database to start writing queries..."
           }
-          disabled={!isConnected}
+          disabled={false}
         />
       </div>
 
@@ -915,4 +936,8 @@ function normalizeSortError(column: string, message?: string): string {
     return `${fallback} The selected column or alias is not sortable in this query result.`;
   }
   return `${fallback} ${message}`;
+}
+
+function getFileName(filePath: string): string {
+  return filePath.split(/[\\/]/).pop() || filePath;
 }

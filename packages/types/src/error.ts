@@ -13,4 +13,7 @@ export type AppErrorCode =
   | "QUERY_TIMEOUT"
   | "OBJECT_NOT_FOUND"
   | "PERMISSION_DENIED"
+  | "INVALID_NAME"
+  | "PATH_CONFLICT"
+  | "INVALID_OPERATION"
   | "UNKNOWN";

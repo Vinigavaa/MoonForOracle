@@ -15,11 +15,40 @@ import type {
   SearchColumnsRequest,
   QueryExportRequest,
   QueryExportProgress,
+  WorkspaceCreateItemRequest,
+  WorkspaceDeleteItemRequest,
+  WorkspaceMoveItemRequest,
+  WorkspaceReadFileRequest,
+  WorkspaceRenameItemRequest,
 } from "@gavadb/types";
 
 contextBridge.exposeInMainWorld("gavadb", {
   saveFile: (content: string, filePath?: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.FILE_SAVE, { content, filePath }),
+
+  workspaceGetTree: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_GET_TREE),
+
+  workspaceOpenFolder: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_OPEN_FOLDER),
+
+  workspaceCreateFolder: (request: WorkspaceCreateItemRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_CREATE_FOLDER, request),
+
+  workspaceCreateFile: (request: WorkspaceCreateItemRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_CREATE_FILE, request),
+
+  workspaceRenameItem: (request: WorkspaceRenameItemRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_RENAME_ITEM, request),
+
+  workspaceMoveItem: (request: WorkspaceMoveItemRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_MOVE_ITEM, request),
+
+  workspaceDeleteItem: (request: WorkspaceDeleteItemRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_DELETE_ITEM, request),
+
+  workspaceReadFile: (request: WorkspaceReadFileRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_READ_FILE, request),
 
   dbConnect: (config: ConnectionConfig) =>
     ipcRenderer.invoke(IPC_CHANNELS.DB_CONNECT, config),

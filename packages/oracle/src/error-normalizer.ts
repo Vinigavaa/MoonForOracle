@@ -76,6 +76,9 @@ function friendlyMessage(code: AppErrorCode, oraNum?: number): string {
     QUERY_TIMEOUT: `${prefix}Query timed out`,
     OBJECT_NOT_FOUND: `${prefix}Database object not found or not accessible`,
     PERMISSION_DENIED: `${prefix}Insufficient privileges`,
+    INVALID_NAME: `${prefix}Invalid name`,
+    PATH_CONFLICT: `${prefix}An item with this name already exists`,
+    INVALID_OPERATION: `${prefix}This operation is not allowed`,
     UNKNOWN: "An unexpected error occurred",
   };
   return messages[code];

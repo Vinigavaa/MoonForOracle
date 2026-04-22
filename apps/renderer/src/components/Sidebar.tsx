@@ -1,12 +1,15 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import type { DatabaseObjectType, DatabaseObjectSummary, SavedConnection } from "@gavadb/types";
+import { Blocks, ChevronDown, Globe, Package, Play, Table, type LucideIcon } from "lucide-react";
+import type { DatabaseObjectType, DatabaseObjectSummary, SavedConnection, WorkspaceReadFileResponse } from "@gavadb/types";
 import { useObjectList, type SectionState } from "../hooks/useObjectList";
 import { loadSidebarPreferences, saveSidebarPreferences } from "../lib/sidebarPreferences";
+import { WorkspacePanel } from "./workspace/WorkspacePanel";
 
 interface SidebarProps {
   collapsed: boolean;
   isConnected: boolean;
   onObjectSelect: (type: DatabaseObjectType, name: string) => void;
+  onOpenWorkspaceFile: (file: WorkspaceReadFileResponse) => void;
   savedConnections: SavedConnection[];
   activeConnectionId: string | null;
   connectingId: string | null;
@@ -20,22 +23,24 @@ interface SidebarProps {
 interface SectionDef {
   type: DatabaseObjectType;
   label: string;
-  icon: string;
+  icon?: LucideIcon;
+  fallbackIcon?: string;
 }
 
 const SECTIONS: SectionDef[] = [
-  { type: "tables", label: "Tables", icon: "\u229E" },
-  { type: "views", label: "Views", icon: "\u25EB" },
-  { type: "triggers", label: "Triggers", icon: "\u25B7" },
-  { type: "packages", label: "Packages", icon: "\u25F0" },
-  { type: "procedures", label: "Procedures", icon: "\u25B7" },
-  { type: "functions", label: "Functions", icon: "\u0192" },
+  { type: "tables", label: "Tables", icon: Table },
+  { type: "views", label: "Views", icon: Globe },
+  { type: "triggers", label: "Triggers", icon: Play },
+  { type: "packages", label: "Packages", icon: Package },
+  { type: "procedures", label: "Procedures", icon: Blocks },
+  { type: "functions", label: "Functions", fallbackIcon: "\u0192" },
 ];
 
 export function Sidebar({
   collapsed,
   isConnected,
   onObjectSelect,
+  onOpenWorkspaceFile,
   savedConnections,
   activeConnectionId,
   connectingId,
@@ -90,6 +95,9 @@ export function Sidebar({
           <div title="Connections" style={collapsedSidebarIconStyle}>
             {"\u26A1"}
           </div>
+          <div title="Workspace files" style={collapsedSidebarIconStyle}>
+            {"\u25A3"}
+          </div>
           <div title="Database Objects" style={collapsedSidebarIconStyle}>
             {"\u25A6"}
           </div>
@@ -136,6 +144,7 @@ export function Sidebar({
         onDelete={onDeleteConnection}
         onToggleFavorite={onToggleFavorite}
       />
+      <WorkspacePanel onOpenFile={onOpenWorkspaceFile} />
 
       {/* ��─ Database Objects section ── */}
       <div style={{ borderBottom: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
@@ -401,10 +410,10 @@ function CollapsibleSectionHeader({
       <span
         style={{
           ...collapsibleSectionChevronStyle,
-          transform: expanded ? "rotate(90deg)" : "rotate(0deg)",
+          transform: expanded ? "rotate(0deg)" : "rotate(-90deg)",
         }}
       >
-        {"\u25B6"}
+        <ChevronDown size={13} strokeWidth={2.2} aria-hidden="true" />
       </span>
       <span>{label}</span>
       <span style={collapsibleSectionCountStyle}>{count ?? ""}</span>
@@ -485,9 +494,13 @@ const collapsibleSectionHeaderStyle: React.CSSProperties = {
 };
 
 const collapsibleSectionChevronStyle: React.CSSProperties = {
-  fontSize: 10,
   transition: "transform 0.15s",
-  display: "inline-block",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 13,
+  height: 13,
+  flexShrink: 0,
 };
 
 const collapsibleSectionCountStyle: React.CSSProperties = {
@@ -571,6 +584,16 @@ const collapsedSidebarStatusStyle: React.CSSProperties = {
   borderRadius: 999,
 };
 
+const databaseObjectIconStyle: React.CSSProperties = {
+  width: 16,
+  height: 16,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "var(--text-muted)",
+  flexShrink: 0,
+};
+
 interface SidebarSectionProps {
   def: SectionDef;
   isConnected: boolean;
@@ -585,6 +608,7 @@ interface SidebarSectionProps {
 function SidebarSection({
   def, isConnected, expanded, state, filter, onToggle, onReload, onObjectSelect,
 }: SidebarSectionProps) {
+  const SectionIcon = def.icon;
   const filtered = useMemo(() => {
     if (!filter) return state.objects;
     return state.objects.filter((o) => o.name.toLowerCase().includes(filter));
@@ -615,14 +639,20 @@ function SidebarSection({
         }}
       >
         <span style={{
-          fontSize: 10,
           transition: "transform 0.15s",
-          transform: showExpanded ? "rotate(90deg)" : "rotate(0deg)",
-          display: "inline-block",
+          transform: showExpanded ? "rotate(0deg)" : "rotate(-90deg)",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 13,
+          height: 13,
+          flexShrink: 0,
         }}>
-          {"\u25B6"}
+          <ChevronDown size={13} strokeWidth={2.2} aria-hidden="true" />
         </span>
-        <span>{def.icon}</span>
+        <span style={databaseObjectIconStyle}>
+          {SectionIcon ? <SectionIcon size={14} strokeWidth={1.9} aria-hidden="true" /> : def.fallbackIcon}
+        </span>
         <span>{def.label}</span>
         <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--text-muted)" }}>
           {state.loading ? "..." : state.loaded ? count : ""}
