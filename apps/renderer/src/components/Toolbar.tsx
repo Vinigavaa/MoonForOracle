@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import type { ConnectionStatus } from "@gavadb/types";
-import { Bolt } from "lucide-react";
+import { Settings } from "lucide-react";
 import moonForOracleLogo from "../assets/MoonForOracle.png";
 
 interface ToolbarProps {
@@ -200,7 +200,7 @@ export function Toolbar({
         title="Preferências"
         style={preferencesButtonStyle}
       >
-        <Bolt size={14} strokeWidth={1.9} aria-hidden="true" />
+        <Settings size={15} strokeWidth={1.9} aria-hidden="true" />
       </button>
 
       <div className="app-window-controls app-no-drag" aria-label="Window controls">
@@ -231,7 +231,7 @@ const preferencesButtonStyle: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  border: "1px solid var(--border-color)",
+  border: "none",
   background: "transparent",
   color: "var(--text-secondary)",
 };
