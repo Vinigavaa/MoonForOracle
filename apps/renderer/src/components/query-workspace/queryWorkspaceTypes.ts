@@ -59,6 +59,13 @@ export interface QueryTabDragData {
   sourceGroupId: string;
 }
 
+export interface QueryWorkspaceTabSummary {
+  id: string;
+  label: string;
+  groupId: string;
+  closable: boolean;
+}
+
 export function createQueryTab(connectionId: string | null = null, partial?: Partial<QueryTabState>): QueryTabState {
   return {
     id: partial?.id ?? generateId(),
@@ -105,4 +112,8 @@ export function createDefaultQueryWorkspaceState(connectionId: string | null = n
 
 export function getFileName(filePath: string): string {
   return filePath.split(/[\\/]/).pop() || filePath;
+}
+
+export function getQueryTabLabel(filePath: string | null, queryIndex: number): string {
+  return filePath ? getFileName(filePath) : `Query ${queryIndex}`;
 }

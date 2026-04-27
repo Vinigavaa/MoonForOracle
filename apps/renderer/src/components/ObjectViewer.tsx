@@ -39,23 +39,12 @@ const TYPE_COLORS: Record<DatabaseObjectType, string> = {
 
 export function ObjectViewer({ objectType, objectName, activeConnectionId = null, onViewSql }: ObjectViewerProps) {
   const { detail, error, loading, reload } = useObjectDetail(objectType, objectName);
+  const showToolbar = detail?.kind !== "source";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* Header */}
-      <div style={{
-        padding: "6px 14px",
-        fontSize: 12,
-        color: "var(--text-secondary)",
-        background: "var(--panel-bg)",
-        borderBottom: "1px solid var(--border-subtle)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        flexShrink: 0,
-        gap: 10,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      {showToolbar && (
+        <div style={objectToolbarStyle}>
           <span style={{
             padding: "1px 7px",
             fontSize: 10,
@@ -70,18 +59,12 @@ export function ObjectViewer({ objectType, objectName, activeConnectionId = null
           }}>
             {TYPE_LABELS[objectType]}
           </span>
-          <span style={{ fontWeight: 600, fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--text-primary)" }}>
-            {objectName}
-          </span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {!loading && (
             <button onClick={reload} style={reloadBtnStyle}>Reload</button>
           )}
         </div>
-      </div>
+      )}
 
-      {/* Content */}
       <div style={{ flex: 1, overflow: "auto", background: "var(--code-viewer-bg)" }}>
         {loading && (
           <div style={centeredStyle}>
@@ -348,6 +331,19 @@ function EmptySection({ message }: { message: string }) {
 const centeredStyle: React.CSSProperties = {
   display: "flex", alignItems: "center", justifyContent: "center",
   height: "100%", color: "var(--text-muted)", fontSize: "var(--font-size-sm)",
+};
+
+const objectToolbarStyle: React.CSSProperties = {
+  padding: "6px 14px",
+  fontSize: 12,
+  color: "var(--text-secondary)",
+  background: "var(--panel-bg)",
+  borderBottom: "1px solid var(--border-subtle)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  flexShrink: 0,
+  gap: 10,
 };
 
 const errorBoxStyle: React.CSSProperties = {

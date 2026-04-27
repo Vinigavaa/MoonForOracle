@@ -27,7 +27,6 @@ interface QueryEditorPaneProps {
   resultSplitRatio: number;
   onResultSplitRatioChange: (ratio: number) => void;
   onUpdateTab: (tabId: string, patch: Partial<QueryTabState>) => void;
-  onActivateGroup: () => void;
   onOpenObject: (type: DatabaseObjectType, name: string) => void;
   onCloseActiveTab: () => void;
 }
@@ -49,7 +48,6 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
     resultSplitRatio,
     onResultSplitRatioChange,
     onUpdateTab,
-    onActivateGroup,
     onOpenObject,
     onCloseActiveTab,
   },
@@ -542,18 +540,6 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
 
   return (
     <div ref={containerRef} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div style={{
-        padding: "3px 12px",
-        fontSize: 11,
-        color: "var(--text-muted)",
-        background: "var(--panel-bg)",
-        borderBottom: "1px solid var(--border-subtle)",
-        flexShrink: 0,
-        minHeight: 24,
-      }}>
-        {renderExecutionHint(activeTab.currentExecutionSnapshot)}
-      </div>
-
       <div style={{ flex: `0 0 ${resultSplitRatio * 100}%`, minHeight: MIN_EDITOR_HEIGHT, overflow: "hidden" }}>
         <SqlCodeEditor
           ref={editorRef}
@@ -624,23 +610,6 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
     </div>
   );
 });
-
-function renderExecutionHint(snapshot: QueryTabState["currentExecutionSnapshot"]): string {
-  if (!snapshot) return "No statement selected";
-
-  const target = resolveSingleExecutionTarget(snapshot);
-  if (target?.source === "selection") {
-    return `Selection ready to execute (${target.range.end - target.range.start} chars)`;
-  }
-
-  if (!snapshot.activeStatement) {
-    return snapshot.statements.length > 0
-      ? `${snapshot.statements.length} statement(s) detected`
-      : "No executable statement detected";
-  }
-
-  return `Current statement ${snapshot.activeStatement.index + 1} of ${snapshot.statements.length}`;
-}
 
 function normalizeSortError(column: string, message?: string): string {
   const fallback = `Unable to sort by column "${column}".`;

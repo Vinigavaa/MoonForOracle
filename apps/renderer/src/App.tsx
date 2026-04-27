@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import type {
   ConnectionConfig,
   DatabaseObjectType,
@@ -9,7 +9,7 @@ import type { UpdaterStatus } from "@gavadb/ipc-contract";
 import { Toolbar } from "./components/Toolbar";
 import { Sidebar } from "./components/Sidebar";
 import { SqlEditor, type SqlEditorHandle } from "./components/SqlEditor";
-import { TabPanel, type Tab } from "./components/TabPanel";
+import { EditorTabBar, type EditorTabBarItem } from "./components/EditorTabBar";
 import { ObjectViewer } from "./components/ObjectViewer";
 import { ObjectSqlViewer } from "./components/ObjectSqlViewer";
 import { ThemePreferencesPanel } from "./components/ThemePreferencesPanel";
@@ -19,8 +19,7 @@ import { useConnection } from "./hooks/useConnection";
 import { useSavedConnections } from "./hooks/useSavedConnections";
 import { useToastContext } from "./hooks/ToastContext";
 import { loadSidebarPreferences, saveSidebarPreferences } from "./lib/sidebarPreferences";
-
-const SQL_TAB_ID = "sql-editor";
+import type { QueryWorkspaceViewState } from "./components/query-workspace/QueryWorkspace";
 
 interface ObjectTab {
   id: string;
@@ -64,13 +63,28 @@ export function App() {
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => loadSidebarPreferences().collapsed);
   const [updaterStatus, setUpdaterStatus] = useState<UpdaterStatus | null>(null);
-  const [activeTab, setActiveTab] = useState(SQL_TAB_ID);
+  const [activeTab, setActiveTab] = useState<string | null>(null);
   const [objectTabs, setObjectTabs] = useState<ObjectTab[]>([]);
   const [objectSqlTabs, setObjectSqlTabs] = useState<ObjectSqlTab[]>([]);
+  const [queryWorkspaceView, setQueryWorkspaceView] = useState<QueryWorkspaceViewState>({
+    tabs: [],
+    activeTabId: null,
+    isSplit: false,
+  });
+  const [tabOrder, setTabOrder] = useState<string[]>([]);
   const dismissedUpdateVersionRef = useRef<string | null>(null);
+  const pendingQueryActivationRef = useRef(false);
   const executeTriggerRef = useRef<(() => void) | null>(null);
   const executeAllTriggerRef = useRef<(() => void) | null>(null);
   const sqlEditorRef = useRef<SqlEditorHandle | null>(null);
+
+  const objectTabIds = useMemo(
+    () => new Set([
+      ...objectTabs.map((tab) => tab.id),
+      ...objectSqlTabs.map((tab) => tab.id),
+    ]),
+    [objectSqlTabs, objectTabs],
+  );
 
   useEffect(() => {
     const preferences = loadSidebarPreferences();
@@ -100,7 +114,7 @@ export function App() {
       }
     });
     return cleanup;
-  }, [toast, showConnModal]);
+  }, [showConnModal, toast]);
 
   useEffect(() => {
     if (!window.gavadb) return;
@@ -156,7 +170,7 @@ export function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [preferencesOpen, closePreferences]);
+  }, [closePreferences, preferencesOpen]);
 
   const handleOpenConnect = useCallback(() => {
     clearError();
@@ -208,7 +222,7 @@ export function App() {
     setActiveConnectionId(id);
     await savedConns.updateLastUsed(id);
     setConnectingId(null);
-  }, [isConnected, connect, savedConns, activeConnectionId, toast]);
+  }, [activeConnectionId, connect, isConnected, savedConns, toast]);
 
   const handleEditSavedConnection = useCallback(async (conn: SavedConnection) => {
     const connData = await savedConns.getWithPassword(conn.id);
@@ -216,7 +230,7 @@ export function App() {
     setEditingPassword(connData?.password ?? "");
     clearError();
     setShowConnModal(true);
-  }, [savedConns, clearError]);
+  }, [clearError, savedConns]);
 
   const handleDeleteSavedConnection = useCallback(async (id: string, name: string) => {
     const removed = await savedConns.remove(id);
@@ -224,7 +238,7 @@ export function App() {
       toast.info(`Connection "${name}" deleted`);
       if (activeConnectionId === id) setActiveConnectionId(null);
     }
-  }, [savedConns, toast, activeConnectionId]);
+  }, [activeConnectionId, savedConns, toast]);
 
   const handleCloseModal = useCallback(() => {
     if (!isConnecting) {
@@ -233,7 +247,7 @@ export function App() {
       setEditingPassword("");
       clearError();
     }
-  }, [isConnecting, clearError]);
+  }, [clearError, isConnecting]);
 
   const prevConnectedRef = useRef(false);
   useEffect(() => {
@@ -302,67 +316,160 @@ export function App() {
       toast.warning("Connect to a database first");
       return;
     }
-    setActiveTab(SQL_TAB_ID);
+    pendingQueryActivationRef.current = true;
+    setActiveTab(queryWorkspaceView.activeTabId);
     executeTriggerRef.current?.();
-  }, [isConnected, toast]);
+  }, [isConnected, queryWorkspaceView.activeTabId, toast]);
 
   const handleExecuteAllSql = useCallback(() => {
     if (!isConnected) {
       toast.warning("Connect to a database first");
       return;
     }
-    setActiveTab(SQL_TAB_ID);
+    pendingQueryActivationRef.current = true;
+    setActiveTab(queryWorkspaceView.activeTabId);
     executeAllTriggerRef.current?.();
-  }, [isConnected, toast]);
+  }, [isConnected, queryWorkspaceView.activeTabId, toast]);
 
   const handleObjectSelect = useCallback((type: DatabaseObjectType, name: string) => {
     const id = `obj:${type}:${name}`;
     setObjectTabs((prev) => prev.some((tab) => tab.id === id) ? prev : [...prev, { id, type, name }]);
+    setTabOrder((prev) => (prev.includes(id) ? prev : [...prev, id]));
     setActiveTab(id);
   }, []);
 
   const handleObjectSqlOpen = useCallback((type: DatabaseObjectType, name: string) => {
     const id = `obj-sql:${type}:${name}`;
     setObjectSqlTabs((prev) => prev.some((tab) => tab.id === id) ? prev : [...prev, { id, type, name }]);
+    setTabOrder((prev) => (prev.includes(id) ? prev : [...prev, id]));
     setActiveTab(id);
   }, []);
 
+  const handleWorkspaceStateChange = useCallback((state: QueryWorkspaceViewState) => {
+    setQueryWorkspaceView(state);
+    setActiveTab((prev) => {
+      const shouldActivateQuery = pendingQueryActivationRef.current || prev === null || !objectTabIds.has(prev);
+      pendingQueryActivationRef.current = false;
+      return shouldActivateQuery ? state.activeTabId : prev;
+    });
+  }, [objectTabIds]);
+
   const handleOpenWorkspaceFile = useCallback((file: WorkspaceReadFileResponse) => {
-    setActiveTab(SQL_TAB_ID);
+    pendingQueryActivationRef.current = true;
     sqlEditorRef.current?.openFile(file);
   }, []);
 
+  const handleTabChange = useCallback((id: string) => {
+    if (queryWorkspaceView.tabs.some((tab) => tab.id === id)) {
+      pendingQueryActivationRef.current = true;
+      setActiveTab(id);
+      sqlEditorRef.current?.selectTab(id);
+      return;
+    }
+
+    setActiveTab(id);
+  }, [queryWorkspaceView.tabs]);
+
+  const handleAddQueryTab = useCallback(() => {
+    pendingQueryActivationRef.current = true;
+    sqlEditorRef.current?.addTab();
+  }, []);
+
   const handleTabClose = useCallback((id: string) => {
+    if (queryWorkspaceView.tabs.some((tab) => tab.id === id)) {
+      sqlEditorRef.current?.closeTab(id);
+      return;
+    }
+
     setObjectTabs((prev) => prev.filter((tab) => tab.id !== id));
     setObjectSqlTabs((prev) => prev.filter((tab) => tab.id !== id));
-    setActiveTab((prev) => (prev === id ? SQL_TAB_ID : prev));
-  }, []);
+    setTabOrder((prev) => prev.filter((tabId) => tabId !== id));
+    setActiveTab((prev) => (prev === id ? queryWorkspaceView.activeTabId : prev));
+  }, [queryWorkspaceView.activeTabId, queryWorkspaceView.tabs]);
 
   const prevConnected2 = useRef(false);
   useEffect(() => {
     if (!isConnected && prevConnected2.current) {
       setObjectTabs([]);
       setObjectSqlTabs([]);
-      setActiveTab(SQL_TAB_ID);
+      setTabOrder([]);
+      pendingQueryActivationRef.current = true;
+      setActiveTab(queryWorkspaceView.activeTabId);
     }
     prevConnected2.current = isConnected;
-  }, [isConnected]);
+  }, [isConnected, queryWorkspaceView.activeTabId]);
 
-  const tabs: Tab[] = [{ id: SQL_TAB_ID, label: "SQL Editor" }];
-  for (const tab of objectTabs) {
-    tabs.push({
-      id: tab.id,
-      label: tab.name,
-      closable: true,
+  useEffect(() => {
+    const knownIds = new Set([
+      ...queryWorkspaceView.tabs.map((tab) => tab.id),
+      ...objectTabs.map((tab) => tab.id),
+      ...objectSqlTabs.map((tab) => tab.id),
+    ]);
+
+    setTabOrder((prev) => {
+      const next = prev.filter((id) => knownIds.has(id));
+
+      for (const tab of queryWorkspaceView.tabs) {
+        if (!next.includes(tab.id)) {
+          next.push(tab.id);
+        }
+      }
+      for (const tab of objectTabs) {
+        if (!next.includes(tab.id)) {
+          next.push(tab.id);
+        }
+      }
+      for (const tab of objectSqlTabs) {
+        if (!next.includes(tab.id)) {
+          next.push(tab.id);
+        }
+      }
+
+      return next.length === prev.length && next.every((id, index) => id === prev[index]) ? prev : next;
     });
-  }
-  for (const tab of objectSqlTabs) {
-    tabs.push({
-      id: tab.id,
-      label: `${tab.name} SQL`,
-      closable: true,
-    });
-  }
+  }, [objectSqlTabs, objectTabs, queryWorkspaceView.tabs]);
+
+  const tabs = useMemo<EditorTabBarItem[]>(() => {
+    const byId = new Map<string, EditorTabBarItem>();
+
+    for (const tab of queryWorkspaceView.tabs) {
+      byId.set(tab.id, {
+        id: tab.id,
+        label: tab.label,
+        closable: tab.closable,
+        draggable: true,
+        onDragStart: (event: DragEvent<HTMLButtonElement>) => {
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData("text/plain", tab.id);
+          sqlEditorRef.current?.startTabDrag(tab.id);
+        },
+        onDragEnd: () => {
+          sqlEditorRef.current?.endTabDrag();
+        },
+      });
+    }
+    for (const tab of objectTabs) {
+      byId.set(tab.id, {
+        id: tab.id,
+        label: tab.name,
+        closable: true,
+      });
+    }
+    for (const tab of objectSqlTabs) {
+      byId.set(tab.id, {
+        id: tab.id,
+        label: `${tab.name} SQL`,
+        closable: true,
+      });
+    }
+
+    return tabOrder
+      .map((id) => byId.get(id) ?? null)
+      .filter((tab): tab is EditorTabBarItem => tab !== null);
+  }, [objectSqlTabs, objectTabs, queryWorkspaceView.tabs, tabOrder]);
+
+  const activeUnifiedTabId = activeTab ?? queryWorkspaceView.activeTabId;
+  const showQueryWorkspace = !activeUnifiedTabId || queryWorkspaceView.tabs.some((tab) => tab.id === activeUnifiedTabId);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
@@ -397,36 +504,48 @@ export function App() {
           onToggleCollapse={() => setSidebarCollapsed((current) => !current)}
         />
 
-        <TabPanel tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} onTabClose={handleTabClose}>
-          <div style={{ display: activeTab === SQL_TAB_ID ? "contents" : "none" }}>
-            <SqlEditor
-              ref={sqlEditorRef}
-              isConnected={isConnected}
-              activeConnectionId={activeConnectionId}
-              hasPendingTransaction={transactionState.hasPendingChanges}
-              executeTriggerRef={executeTriggerRef}
-              executeAllTriggerRef={executeAllTriggerRef}
-              onOpenObject={handleObjectSelect}
-            />
-          </div>
+        <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+          <EditorTabBar
+            tabs={tabs}
+            activeTabId={activeUnifiedTabId}
+            onTabSelect={handleTabChange}
+            onTabClose={handleTabClose}
+            onAddTab={handleAddQueryTab}
+            addButtonTitle="Nova Query"
+          />
 
-          {objectTabs.map((tab) => (
-            <div key={tab.id} style={{ display: activeTab === tab.id ? "contents" : "none" }}>
-              <ObjectViewer
-                objectType={tab.type}
-                objectName={tab.name}
+          <div style={{ flex: 1, overflow: "hidden" }}>
+            <div style={{ display: showQueryWorkspace ? "contents" : "none" }}>
+              <SqlEditor
+                ref={sqlEditorRef}
+                isConnected={isConnected}
                 activeConnectionId={activeConnectionId}
-                onViewSql={handleObjectSqlOpen}
+                hasPendingTransaction={transactionState.hasPendingChanges}
+                executeTriggerRef={executeTriggerRef}
+                executeAllTriggerRef={executeAllTriggerRef}
+                onOpenObject={handleObjectSelect}
+                onWorkspaceStateChange={handleWorkspaceStateChange}
               />
             </div>
-          ))}
 
-          {objectSqlTabs.map((tab) => (
-            <div key={tab.id} style={{ display: activeTab === tab.id ? "contents" : "none" }}>
-              <ObjectSqlViewer objectType={tab.type} objectName={tab.name} />
-            </div>
-          ))}
-        </TabPanel>
+            {objectTabs.map((tab) => (
+              <div key={tab.id} style={{ display: activeUnifiedTabId === tab.id ? "contents" : "none" }}>
+                <ObjectViewer
+                  objectType={tab.type}
+                  objectName={tab.name}
+                  activeConnectionId={activeConnectionId}
+                  onViewSql={handleObjectSqlOpen}
+                />
+              </div>
+            ))}
+
+            {objectSqlTabs.map((tab) => (
+              <div key={tab.id} style={{ display: activeUnifiedTabId === tab.id ? "contents" : "none" }}>
+                <ObjectSqlViewer objectType={tab.type} objectName={tab.name} />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {preferencesOpen && (

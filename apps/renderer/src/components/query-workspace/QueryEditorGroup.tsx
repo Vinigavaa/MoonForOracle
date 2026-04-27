@@ -1,7 +1,6 @@
 import { forwardRef, memo, useImperativeHandle, useRef, useState, type CSSProperties } from "react";
 import type { DatabaseObjectType } from "@gavadb/types";
 import { QueryEditorPane, type QueryEditorPaneHandle } from "./QueryEditorPane";
-import { QueryTabBar } from "./QueryTabBar";
 import type {
   EditorGroup,
   QueryDropPosition,
@@ -89,31 +88,10 @@ export const QueryEditorGroup = memo(forwardRef<QueryEditorGroupHandle, QueryEdi
         position: "relative",
         background: "var(--panel-bg)",
         boxShadow: isActive
-          ? "inset 0 0 0 1px rgba(137, 180, 250, 0.28)"
-          : "inset 0 0 0 1px rgba(255, 255, 255, 0.02)",
+          ? "inset 1px 0 0 rgba(137, 180, 250, 0.28), inset -1px 0 0 rgba(137, 180, 250, 0.28), inset 0 -1px 0 rgba(137, 180, 250, 0.28)"
+          : "inset 1px 0 0 rgba(255, 255, 255, 0.02), inset -1px 0 0 rgba(255, 255, 255, 0.02), inset 0 -1px 0 rgba(255, 255, 255, 0.02)",
       }}
     >
-      <QueryTabBar
-        groupId={group.id}
-        tabs={group.tabs}
-        activeTabId={group.activeTabId}
-        isGroupActive={isActive}
-        onTabSelect={(tabId) => {
-          onActivateGroup();
-          onTabSelect(tabId);
-        }}
-        onTabClose={onTabClose}
-        onAddTab={() => {
-          onActivateGroup();
-          onAddTab();
-        }}
-        onDragStart={onDragStart}
-        onDragEnd={() => {
-          setHoveredDropPosition(null);
-          onDragEnd();
-        }}
-      />
-
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         {activeTab ? (
           <QueryEditorPane
@@ -124,7 +102,6 @@ export const QueryEditorGroup = memo(forwardRef<QueryEditorGroupHandle, QueryEdi
             resultSplitRatio={group.resultSplitRatio}
             onResultSplitRatioChange={onResultSplitRatioChange}
             onUpdateTab={(tabId, patch) => onUpdateTab(tabId, patch)}
-            onActivateGroup={onActivateGroup}
             onOpenObject={onOpenObject}
             onCloseActiveTab={() => {
               if (group.tabs.length > 1) {

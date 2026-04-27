@@ -118,13 +118,10 @@ export function ObjectEditorContainer({ detail, connectionId }: ObjectEditorCont
       ? "spec"
       : "body"
     : null;
-  const activeLabel = getActiveLabel(activeTab);
-
   return (
     <div ref={rootRef} style={rootStyle}>
       <ObjectEditorHeader
         isPackageEditor={isPackageEditor}
-        activeLabel={activeLabel}
         activePart={activePart}
         isDirty={isDirty}
         compiling={activeTab.compiling}
@@ -201,12 +198,6 @@ function resolveDefaultActiveTabId(tabs: ObjectSourceTab[]): string | null {
     return "body";
   }
   return tabs[0]?.id ?? null;
-}
-
-function getActiveLabel(tab: EditableSourceTabState): string {
-  if (tab.id === "spec") return "Package Spec";
-  if (tab.id === "body") return "Package Body";
-  return tab.label;
 }
 
 const rootStyle: React.CSSProperties = {

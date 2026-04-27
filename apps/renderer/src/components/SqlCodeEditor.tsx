@@ -70,7 +70,7 @@ function buildCmTheme(cfg: EditorThemeConfig) {
       color: cfg.textDefault,
     },
     ".cm-content": {
-      padding: "8px 12px",
+      padding: "0 12px 8px",
       caretColor: cfg.cursor,
       lineHeight: "1.6",
       tabSize: "2",

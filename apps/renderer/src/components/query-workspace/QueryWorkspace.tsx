@@ -11,7 +11,9 @@ import {
   type QueryDropPosition,
   type QueryTabDragData,
   type QueryTabState,
+  type QueryWorkspaceTabSummary,
   type QueryWorkspaceState,
+  getQueryTabLabel,
 } from "./queryWorkspaceTypes";
 
 const MIN_GROUP_WIDTH = 320;
@@ -23,11 +25,23 @@ interface QueryWorkspaceProps {
   executeTriggerRef: React.MutableRefObject<(() => void) | null>;
   executeAllTriggerRef: React.MutableRefObject<(() => void) | null>;
   onOpenObject: (type: DatabaseObjectType, name: string) => void;
+  onWorkspaceStateChange?: (state: QueryWorkspaceViewState) => void;
 }
 
 export interface QueryWorkspaceHandle {
   focus: () => void;
   openFile: (file: WorkspaceReadFileResponse) => void;
+  selectTab: (tabId: string) => void;
+  closeTab: (tabId: string) => void;
+  addTab: () => void;
+  startTabDrag: (tabId: string) => void;
+  endTabDrag: () => void;
+}
+
+export interface QueryWorkspaceViewState {
+  tabs: QueryWorkspaceTabSummary[];
+  activeTabId: string | null;
+  isSplit: boolean;
 }
 
 export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspaceProps>(function QueryWorkspace(
@@ -38,6 +52,7 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
     executeTriggerRef,
     executeAllTriggerRef,
     onOpenObject,
+    onWorkspaceStateChange,
   },
   ref,
 ) {
@@ -53,6 +68,9 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
   }, [workspace]);
 
   const resolvedActiveGroupId = workspace.activeGroupId ?? workspace.groups[0]?.id ?? null;
+  const resolvedActiveTabId = workspace.groups.find((group) => group.id === resolvedActiveGroupId)?.activeTabId
+    ?? workspace.groups[0]?.activeTabId
+    ?? null;
 
   useEffect(() => {
     if (hasPendingTransaction) return;
@@ -131,6 +149,47 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
     if (!targetGroupId) return;
     handleAddTab(targetGroupId);
   }, [handleAddTab, resolvedActiveGroupId, workspace.groups]);
+
+  const handleSelectWorkspaceTab = useCallback((tabId: string) => {
+    let focusTargetGroupId: string | null = null;
+
+    setWorkspace((prev) => {
+      const nextGroups = prev.groups.map((group) => {
+        if (!group.tabs.some((tab) => tab.id === tabId)) {
+          return group;
+        }
+
+        focusTargetGroupId = group.id;
+        return { ...group, activeTabId: tabId };
+      });
+
+      if (!focusTargetGroupId) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        activeGroupId: focusTargetGroupId,
+        groups: nextGroups,
+      };
+    });
+
+    focusGroup(focusTargetGroupId);
+  }, [focusGroup]);
+
+  const handleStartWorkspaceTabDrag = useCallback((tabId: string) => {
+    const sourceGroup = workspace.groups.find((group) => group.tabs.some((tab) => tab.id === tabId));
+    if (!sourceGroup) return;
+
+    setDragState({
+      tabId,
+      sourceGroupId: sourceGroup.id,
+    });
+  }, [workspace.groups]);
+
+  const handleEndWorkspaceTabDrag = useCallback(() => {
+    setDragState(null);
+  }, []);
 
   const handleSelectTab = useCallback((groupId: string, tabId: string) => {
     setWorkspace((prev) => ({
@@ -336,6 +395,16 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [handleAddTabToActiveGroup]);
 
+  useEffect(() => {
+    if (!onWorkspaceStateChange) return;
+
+    onWorkspaceStateChange({
+      tabs: createWorkspaceTabSummaries(workspace.groups),
+      activeTabId: resolvedActiveTabId,
+      isSplit: workspace.mode === "side-by-side" && workspace.groups.length > 1,
+    });
+  }, [onWorkspaceStateChange, resolvedActiveTabId, workspace.groups, workspace.mode]);
+
   executeTriggerRef.current = () => {
     const activeGroupId = resolvedActiveGroupId;
     if (!activeGroupId) return;
@@ -353,7 +422,16 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
       focusGroup(resolvedActiveGroupId);
     },
     openFile,
-  }), [focusGroup, openFile, resolvedActiveGroupId]);
+    selectTab: handleSelectWorkspaceTab,
+    closeTab: (tabId: string) => {
+      const group = workspace.groups.find((item) => item.tabs.some((tab) => tab.id === tabId));
+      if (!group) return;
+      handleCloseTab(group.id, tabId);
+    },
+    addTab: handleAddTabToActiveGroup,
+    startTabDrag: handleStartWorkspaceTabDrag,
+    endTabDrag: handleEndWorkspaceTabDrag,
+  }), [focusGroup, handleAddTabToActiveGroup, handleCloseTab, handleEndWorkspaceTabDrag, handleSelectWorkspaceTab, handleStartWorkspaceTabDrag, openFile, resolvedActiveGroupId, workspace.groups]);
 
   const groups = workspace.groups;
   const isSplit = workspace.mode === "side-by-side" && groups.length > 1;
@@ -455,6 +533,20 @@ function normalizeWorkspaceState(workspace: QueryWorkspaceState, connectionId: s
       : groups[0].id,
     groupSplitRatio: clampRatio(workspace.groupSplitRatio),
   };
+}
+
+function createWorkspaceTabSummaries(groups: EditorGroup[]): QueryWorkspaceTabSummary[] {
+  let queryCounter = 0;
+
+  return groups.flatMap((group) => group.tabs.map((tab) => {
+    queryCounter += 1;
+    return {
+      id: tab.id,
+      label: getQueryTabLabel(tab.filePath, queryCounter),
+      groupId: group.id,
+      closable: group.tabs.length > 1 || groups.length > 1,
+    };
+  }));
 }
 
 function getNextActiveTabId(

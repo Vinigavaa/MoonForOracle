@@ -4,7 +4,6 @@ type PackagePart = "spec" | "body";
 
 interface ObjectEditorHeaderProps {
   isPackageEditor: boolean;
-  activeLabel: string;
   activePart: PackagePart | null;
   isDirty: boolean;
   compiling: boolean;
@@ -14,7 +13,6 @@ interface ObjectEditorHeaderProps {
 
 export function ObjectEditorHeader({
   isPackageEditor,
-  activeLabel,
   activePart,
   isDirty,
   compiling,
@@ -27,10 +25,7 @@ export function ObjectEditorHeader({
         {isPackageEditor && activePart && onTogglePackagePart ? (
           <PackagePartToggleButton activePart={activePart} isDirty={isDirty} onToggle={onTogglePackagePart} />
         ) : (
-          <div style={activeLabelStyle}>
-            <span>{activeLabel}</span>
-            {isDirty && <span style={dirtyMarkerStyle}>*</span>}
-          </div>
+          <span style={statusPillStyle}>{isDirty ? "Modified" : "Saved"}</span>
         )}
 
         <span style={{ color: isDirty ? "var(--warning)" : "var(--text-muted)", fontSize: 11 }}>
@@ -61,10 +56,9 @@ const toolbarStyle: React.CSSProperties = {
   background: "linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0))",
 };
 
-const activeLabelStyle: React.CSSProperties = {
+const statusPillStyle: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
-  gap: 6,
   minHeight: 28,
   padding: "0 10px",
   color: "var(--text-primary)",
@@ -73,12 +67,6 @@ const activeLabelStyle: React.CSSProperties = {
   fontSize: "var(--font-size-sm)",
   fontWeight: 600,
   whiteSpace: "nowrap",
-};
-
-const dirtyMarkerStyle: React.CSSProperties = {
-  color: "var(--warning)",
-  fontSize: 12,
-  lineHeight: 1,
 };
 
 const compileButtonStyle: React.CSSProperties = {
