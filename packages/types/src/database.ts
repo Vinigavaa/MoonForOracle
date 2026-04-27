@@ -71,12 +71,39 @@ export interface ViewDetail {
   columns: ColumnInfo[];
 }
 
+export type DbObjectType = "package" | "package_body" | "procedure" | "function" | "trigger";
+
+export interface ObjectSourceTab {
+  id: string;
+  label: string;
+  objectType: DbObjectType;
+  source: string;
+}
+
+export interface CompileError {
+  line: number;
+  position: number;
+  message: string;
+}
+
+export interface CompileObjectRequest {
+  sql: string;
+  objectType: DbObjectType;
+  objectName: string;
+  connectionId?: string | null;
+}
+
+export interface CompileResult {
+  success: boolean;
+  errors: CompileError[];
+}
+
 /** Código-fonte de triggers, procedures, functions, packages */
 export interface SourceDetail {
   kind: "source";
   objectName: string;
   objectType: DatabaseObjectType;
-  source: string;
+  tabs: ObjectSourceTab[];
 }
 
 /** Detalhe estruturado de uma check constraint navegável */

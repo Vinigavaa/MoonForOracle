@@ -9,7 +9,12 @@ export type {
   PrimaryKeyDetail,
   TableDetail,
   ViewDetail,
+  DbObjectType,
+  ObjectSourceTab,
   SourceDetail,
+  CompileError,
+  CompileObjectRequest,
+  CompileResult,
   ConstraintDetail,
   ObjectDetailResponse,
 } from "./database";

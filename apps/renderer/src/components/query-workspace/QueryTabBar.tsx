@@ -34,7 +34,7 @@ export const QueryTabBar = memo(function QueryTabBar({
 
   return (
     <div style={tabBarStyle}>
-      <div style={{ display: "flex", alignItems: "stretch", minWidth: 0, overflow: "hidden", flex: 1 }}>
+      <div style={tabListStyle}>
         {displayTabs.map((tab) => {
           const isActive = tab.id === activeTabId;
           return (
@@ -97,19 +97,34 @@ export const QueryTabBar = memo(function QueryTabBar({
 
 const tabBarStyle: React.CSSProperties = {
   display: "flex",
+  flexDirection: "row",
+  flexWrap: "nowrap",
   alignItems: "stretch",
   gap: 0,
   minHeight: 32,
   background: "linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0))",
   borderBottom: "1px solid var(--border-subtle)",
   flexShrink: 0,
+  overflow: "hidden",
+};
+
+const tabListStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "row",
+  flexWrap: "nowrap",
+  alignItems: "stretch",
+  minWidth: 0,
+  flex: 1,
+  overflowX: "auto",
+  overflowY: "hidden",
 };
 
 const tabButtonStyle: React.CSSProperties = {
   display: "flex",
+  flex: "0 0 auto",
   alignItems: "center",
   gap: 6,
-  minWidth: 0,
+  minWidth: 96,
   maxWidth: 220,
   padding: "0 12px",
   border: "none",

@@ -1,4 +1,4 @@
-import type { DatabaseObjectType, OracleObjectKind } from "@gavadb/types";
+import type { DatabaseObjectType, DbObjectType, OracleObjectKind } from "@gavadb/types";
 
 /**
  * SQL para listar objetos do schema atual, filtrado por tipo.
@@ -98,6 +98,19 @@ export function getPackageSourceSql(name: string): string {
   `;
 }
 
+export function getCompilerErrorsSql(objectName: string, objectType: DbObjectType): string {
+  return `
+    SELECT
+      line,
+      position,
+      text
+    FROM user_errors
+    WHERE name = '${objectName}'
+      AND type = '${dbObjectTypeToOracleSourceType(objectType)}'
+    ORDER BY sequence
+  `;
+}
+
 export function getCheckConstraintSql(name: string): string {
   return `
     SELECT
@@ -131,6 +144,21 @@ export function getViewDdlSql(name: string): string {
     SELECT DBMS_METADATA.GET_DDL('VIEW', '${name}', SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')) AS DDL
     FROM dual
   `;
+}
+
+export function dbObjectTypeToOracleSourceType(type: DbObjectType): string {
+  switch (type) {
+    case "package":
+      return "PACKAGE";
+    case "package_body":
+      return "PACKAGE BODY";
+    case "procedure":
+      return "PROCEDURE";
+    case "function":
+      return "FUNCTION";
+    case "trigger":
+      return "TRIGGER";
+  }
 }
 
 /** Mapeia DatabaseObjectType da app para OBJECT_TYPE do Oracle */

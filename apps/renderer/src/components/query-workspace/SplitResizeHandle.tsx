@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, type CSSProperties } from "react";
+import { memo, useEffect, useRef } from "react";
 
 interface SplitResizeHandleProps {
   axis: "horizontal" | "vertical";
@@ -6,7 +6,6 @@ interface SplitResizeHandleProps {
   minPrimarySize: number;
   minSecondarySize: number;
   onChange: (ratio: number) => void;
-  thickness?: number;
 }
 
 export const SplitResizeHandle = memo(function SplitResizeHandle({
@@ -15,91 +14,63 @@ export const SplitResizeHandle = memo(function SplitResizeHandle({
   minPrimarySize,
   minSecondarySize,
   onChange,
-  thickness = 6,
 }: SplitResizeHandleProps) {
   const draggingRef = useRef(false);
 
   useEffect(() => {
-    const onMouseMove = (event: MouseEvent) => {
+    const onPointerMove = (event: PointerEvent) => {
       if (!draggingRef.current || !containerRef.current) return;
 
-      event.preventDefault();
-      window.getSelection()?.removeAllRanges();
-
       const rect = containerRef.current.getBoundingClientRect();
-      const totalSize = axis === "horizontal" ? rect.width : rect.height;
-      const position = axis === "horizontal"
-        ? event.clientX - rect.left
-        : event.clientY - rect.top;
+      const total = axis === "horizontal" ? rect.width : rect.height;
+      if (total <= 0) return;
 
-      if (totalSize <= 0) return;
-
-      const ratio = Math.max(
-        minPrimarySize / totalSize,
-        Math.min(position / totalSize, 1 - minSecondarySize / totalSize),
-      );
+      const offset = axis === "horizontal" ? event.clientX - rect.left : event.clientY - rect.top;
+      const ratio = clamp(offset / total, minPrimarySize / total, 1 - minSecondarySize / total);
       onChange(ratio);
     };
 
-    const onMouseUp = () => {
+    const onPointerUp = () => {
       if (!draggingRef.current) return;
       draggingRef.current = false;
       document.body.classList.remove("is-resizing");
-      document.body.style.removeProperty("--app-resize-cursor");
     };
 
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
     return () => {
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
     };
   }, [axis, containerRef, minPrimarySize, minSecondarySize, onChange]);
 
-  useEffect(() => () => {
-    document.body.classList.remove("is-resizing");
-    document.body.style.removeProperty("--app-resize-cursor");
-  }, []);
-
-  const isHorizontal = axis === "horizontal";
-  const guideStyle: CSSProperties = isHorizontal
-    ? {
-      position: "absolute",
-      left: "50%",
-      top: 10,
-      bottom: 10,
-      width: 1,
-      transform: "translateX(-50%)",
-    }
-    : {
-      position: "absolute",
-      left: 12,
-      right: 12,
-      top: "50%",
-      height: 1,
-      transform: "translateY(-50%)",
-    };
-
   return (
     <div
-      onMouseDown={(event) => {
+      onPointerDown={(event) => {
         if (event.button !== 0) return;
         event.preventDefault();
         draggingRef.current = true;
         document.body.classList.add("is-resizing");
-        document.body.style.setProperty("--app-resize-cursor", isHorizontal ? "col-resize" : "row-resize");
-        window.getSelection()?.removeAllRanges();
       }}
-      style={{
-        flex: `0 0 ${thickness}px`,
-        alignSelf: "stretch",
-        position: "relative",
-        cursor: isHorizontal ? "col-resize" : "row-resize",
-        background: "transparent",
-        userSelect: "none",
-      }}
-    >
-      <div style={{ ...guideStyle, background: "var(--border-subtle)" }} />
-    </div>
+      style={axis === "horizontal" ? horizontalStyle : verticalStyle}
+    />
   );
 });
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
+const horizontalStyle: React.CSSProperties = {
+  width: 5,
+  flexShrink: 0,
+  cursor: "col-resize",
+  background: "var(--border-subtle)",
+};
+
+const verticalStyle: React.CSSProperties = {
+  height: 5,
+  flexShrink: 0,
+  cursor: "row-resize",
+  background: "var(--border-subtle)",
+};

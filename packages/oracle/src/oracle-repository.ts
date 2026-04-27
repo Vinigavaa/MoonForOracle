@@ -4,6 +4,10 @@ import oracledb from "oracledb";
 import type { Connection } from "oracledb";
 import type {
   ConnectionConfig,
+  CompileError,
+  CompileObjectRequest,
+  CompileResult,
+  DbObjectType,
   DeleteRowsRequest,
   EditableQueryInfo,
   MutationResult,
@@ -34,6 +38,7 @@ import {
   getTableDdlSql,
   getViewColumnsSql,
   getViewDdlSql,
+  getCompilerErrorsSql,
   getPackageSourceSql,
   getCheckConstraintSql,
   SEARCHABLE_OBJECT_KINDS,
@@ -63,6 +68,7 @@ export interface DatabaseRepository {
   executeQuery(request: SqlExecutionRequest): Promise<SqlExecutionResponse>;
   inferBinds(sql: string): Promise<BindMetadata[]>;
   getObjectSql(type: DatabaseObjectType, name: string): Promise<string>;
+  compileObject(request: CompileObjectRequest): Promise<CompileResult>;
   countQueryRows(sql: string, binds?: Record<string, import("@gavadb/types").BindParameterValue>): Promise<{ totalRows: number; executionTimeMs: number }>;
   updateRows(request: UpdateRowRequest[]): Promise<MutationResult>;
   deleteRows(request: DeleteRowsRequest): Promise<MutationResult>;
@@ -92,6 +98,7 @@ export interface OracleRepositoryOptions {
 export class OracleRepository implements DatabaseRepository {
   private connection: Connection | null = null;
   private currentConfig: ConnectionConfig | null = null;
+  private runtimeConfig: ConnectionConfig | null = null;
   private pendingTransaction = false;
 
   constructor(options?: OracleRepositoryOptions) {
@@ -162,6 +169,7 @@ export class OracleRepository implements DatabaseRepository {
       this.connection = await Promise.race([connectPromise, timeoutPromise]);
 
       this.currentConfig = { ...config, password: undefined };
+      this.runtimeConfig = { ...config };
       this.pendingTransaction = false;
       console.log(`[Oracle] Connected successfully to ${connectString} (thin=${oracledb.thin})`);
     } catch (err) {
@@ -184,6 +192,7 @@ export class OracleRepository implements DatabaseRepository {
     } finally {
       this.connection = null;
       this.currentConfig = null;
+      this.runtimeConfig = null;
       this.pendingTransaction = false;
     }
   }
@@ -573,14 +582,14 @@ export class OracleRepository implements DatabaseRepository {
       if (type === "views") return await this.fetchViewDetail(conn, name);
       if (type === "ckts" || type === "ckcs") return await this.fetchCheckConstraintDetail(conn, type, name);
 
-      let source: string;
-      if (type === "packages") {
-        source = await this.fetchPackageSource(conn, name);
-      } else {
-        source = await this.fetchCodeSource(conn, type, name);
-      }
-
-      return { kind: "source", objectName: name, objectType: type, source };
+      return {
+        kind: "source",
+        objectName: name,
+        objectType: type,
+        tabs: type === "packages"
+          ? await this.fetchPackageSourceTabs(conn, name)
+          : [await this.fetchSingleSourceTab(conn, type, name)],
+      };
     } catch (err) {
       throw normalizeOracleError(err);
     }
@@ -603,7 +612,7 @@ export class OracleRepository implements DatabaseRepository {
 
       let source: string;
       if (type === "packages") {
-        source = await this.fetchPackageSource(conn, name);
+        source = (await this.fetchPackageSourceTabs(conn, name)).map((tab) => tab.source).join("\n\n");
       } else {
         source = await this.fetchCodeSource(conn, type, name);
       }
@@ -615,6 +624,30 @@ export class OracleRepository implements DatabaseRepository {
 
   getConnectionInfo(): ConnectionConfig | null {
     return this.currentConfig;
+  }
+
+  async compileObject(request: CompileObjectRequest): Promise<CompileResult> {
+    const conn = await this.openIsolatedConnection();
+
+    try {
+      await conn.execute(request.sql, {}, { autoCommit: true });
+      const errors = await this.fetchCompileErrors(conn, request.objectName, request.objectType);
+      return { success: errors.length === 0, errors };
+    } catch (err) {
+      const normalized = normalizeOracleError(err);
+      const errors = await this.fetchCompileErrors(conn, request.objectName, request.objectType).catch(() => []);
+
+      if (errors.length > 0) {
+        return { success: false, errors };
+      }
+
+      return {
+        success: false,
+        errors: [{ line: 0, position: 0, message: normalized.details ? `${normalized.message}\n${normalized.details}` : normalized.message }],
+      };
+    } finally {
+      await conn.close().catch(() => undefined);
+    }
   }
 
   // ─── Private helpers ──────────────────────────────────────────────
@@ -705,25 +738,38 @@ export class OracleRepository implements DatabaseRepository {
     return { kind: "view", objectName: name, text, columns };
   }
 
-  private async fetchPackageSource(conn: Connection, name: string): Promise<string> {
+  private async fetchPackageSourceTabs(conn: Connection, name: string) {
     const result = await conn.execute(
       getPackageSourceSql(name), {}, { outFormat: oracledb.OUT_FORMAT_OBJECT },
     );
     const rows = (result.rows ?? []) as Array<{ TYPE: string; LINE: number; TEXT: string }>;
+    const specSource = this.buildCreateOrReplaceSource(rows.filter((row) => row.TYPE === "PACKAGE").map((row) => row.TEXT));
+    const bodySource = this.buildCreateOrReplaceSource(rows.filter((row) => row.TYPE === "PACKAGE BODY").map((row) => row.TEXT));
 
-    if (rows.length === 0) return `-- No source found for package ${name}`;
+    return [
+      {
+        id: "spec",
+        label: "Spec",
+        objectType: "package" as const,
+        source: specSource || this.buildPackageSpecSkeleton(name),
+      },
+      {
+        id: "body",
+        label: "Body",
+        objectType: "package_body" as const,
+        source: bodySource || this.buildPackageBodySkeleton(name),
+      },
+    ];
+  }
 
-    const bodyLines = rows.filter((r) => r.TYPE === "PACKAGE BODY").map((r) => r.TEXT);
-    if (bodyLines.length > 0) {
-      return `CREATE OR REPLACE ${bodyLines.join("")}`;
-    }
-
-    const specLines = rows.filter((r) => r.TYPE === "PACKAGE").map((r) => r.TEXT);
-    if (specLines.length > 0) {
-      return `CREATE OR REPLACE ${specLines.join("")}`;
-    }
-
-    return `-- No source found for package ${name}`;
+  private async fetchSingleSourceTab(conn: Connection, type: DatabaseObjectType, name: string) {
+    const source = await this.fetchCodeSource(conn, type, name);
+    return {
+      id: "source",
+      label: sourceTabLabel(type),
+      objectType: databaseObjectTypeToDbObjectType(type),
+      source,
+    };
   }
 
   private async fetchCodeSource(conn: Connection, type: DatabaseObjectType, name: string): Promise<string> {
@@ -734,7 +780,55 @@ export class OracleRepository implements DatabaseRepository {
 
     if (rows.length === 0) return `-- No source found for ${type.slice(0, -1)} ${name}`;
 
-    return `CREATE OR REPLACE ${rows.map((r) => r.TEXT).join("")}`;
+    return this.buildCreateOrReplaceSource(rows.map((row) => row.TEXT));
+  }
+
+  private buildCreateOrReplaceSource(lines: string[]): string {
+    if (lines.length === 0) return "";
+    return `CREATE OR REPLACE ${lines.join("")}`;
+  }
+
+  private buildPackageSpecSkeleton(name: string): string {
+    return `CREATE OR REPLACE PACKAGE ${name}\nAS\n\nEND ${name};\n`;
+  }
+
+  private buildPackageBodySkeleton(name: string): string {
+    return `CREATE OR REPLACE PACKAGE BODY ${name}\nAS\n\nEND ${name};\n`;
+  }
+
+  private async openIsolatedConnection(): Promise<Connection> {
+    if (!this.runtimeConfig) {
+      throw normalizeOracleError(new Error("Not connected to any database"));
+    }
+
+    const connectString = this.runtimeConfig.mode === "tns"
+      ? (this.runtimeConfig.tnsAlias?.trim() || this.runtimeConfig.connectString)
+      : `${this.runtimeConfig.host}:${this.runtimeConfig.port}/${this.runtimeConfig.serviceName}`;
+
+    try {
+      return await oracledb.getConnection({
+        user: this.runtimeConfig.username,
+        password: this.runtimeConfig.password,
+        connectString,
+      });
+    } catch (err) {
+      throw normalizeOracleError(err);
+    }
+  }
+
+  private async fetchCompileErrors(conn: Connection, objectName: string, objectType: DbObjectType): Promise<CompileError[]> {
+    const result = await conn.execute(
+      getCompilerErrorsSql(objectName.toUpperCase(), objectType),
+      {},
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+
+    const rows = (result.rows ?? []) as Array<{ LINE: number | null; POSITION: number | null; TEXT: string }>;
+    return rows.map((row) => ({
+      line: row.LINE ?? 0,
+      position: row.POSITION ?? 0,
+      message: row.TEXT,
+    }));
   }
 
   private async fetchCheckConstraintDetail(
@@ -1154,6 +1248,36 @@ function dedupeAutocompleteTables(tables: SearchColumnsRequest["tables"]): Searc
 
 function autocompleteTableKey(table: { schema?: string | null; table: string }): string {
   return `${table.schema?.toUpperCase() ?? ""}.${table.table.toUpperCase()}`;
+}
+
+function databaseObjectTypeToDbObjectType(type: DatabaseObjectType): DbObjectType {
+  switch (type) {
+    case "packages":
+      return "package";
+    case "procedures":
+      return "procedure";
+    case "functions":
+      return "function";
+    case "triggers":
+      return "trigger";
+    default:
+      throw new Error(`Unsupported source object type: ${type}`);
+  }
+}
+
+function sourceTabLabel(type: DatabaseObjectType): string {
+  switch (type) {
+    case "procedures":
+      return "Procedure";
+    case "functions":
+      return "Function";
+    case "triggers":
+      return "Trigger";
+    case "packages":
+      return "Spec";
+    default:
+      throw new Error(`Unsupported source object type: ${type}`);
+  }
 }
 
 /**

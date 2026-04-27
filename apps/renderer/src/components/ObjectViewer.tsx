@@ -6,11 +6,12 @@ import type {
   PrimaryKeyDetail,
 } from "@gavadb/types";
 import { useObjectDetail } from "../hooks/useObjectDetail";
-import { SqlCodeEditor } from "./SqlCodeEditor";
+import { ObjectEditorContainer } from "./ObjectEditorContainer";
 
 interface ObjectViewerProps {
   objectType: DatabaseObjectType;
   objectName: string;
+  activeConnectionId?: string | null;
   onViewSql?: (type: DatabaseObjectType, name: string) => void;
 }
 
@@ -36,14 +37,8 @@ const TYPE_COLORS: Record<DatabaseObjectType, string> = {
   ckcs: "var(--info)",
 };
 
-export function ObjectViewer({ objectType, objectName, onViewSql }: ObjectViewerProps) {
+export function ObjectViewer({ objectType, objectName, activeConnectionId = null, onViewSql }: ObjectViewerProps) {
   const { detail, error, loading, reload } = useObjectDetail(objectType, objectName);
-
-  // Determine display label based on actual source content
-  const sourceKindLabel = detail?.kind === "source" && detail.source
-    ? detectSourceKind(detail.source, objectType)
-    : TYPE_LABELS[objectType];
-  const displayLabel = detail?.kind === "source" ? sourceKindLabel : TYPE_LABELS[objectType];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -73,7 +68,7 @@ export function ObjectViewer({ objectType, objectName, onViewSql }: ObjectViewer
             border: `1px solid ${TYPE_COLORS[objectType]}`,
             whiteSpace: "nowrap",
           }}>
-            {displayLabel}
+            {TYPE_LABELS[objectType]}
           </span>
           <span style={{ fontWeight: 600, fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--text-primary)" }}>
             {objectName}
@@ -105,7 +100,7 @@ export function ObjectViewer({ objectType, objectName, onViewSql }: ObjectViewer
             {detail.kind === "table" && <TableView detail={detail} onViewSql={onViewSql} />}
             {detail.kind === "view" && <ViewView detail={detail} onViewSql={onViewSql} />}
             {detail.kind === "constraint" && <ConstraintView detail={detail} />}
-            {detail.kind === "source" && <SourceView source={detail.source} />}
+            {detail.kind === "source" && <ObjectEditorContainer detail={detail} connectionId={activeConnectionId} />}
           </>
         )}
       </div>
@@ -114,15 +109,6 @@ export function ObjectViewer({ objectType, objectName, onViewSql }: ObjectViewer
 }
 
 // ─── Detect specific source kind ────────────────────────────────────
-
-function detectSourceKind(source: string, objectType: DatabaseObjectType): string {
-  const upper = source.slice(0, 300).toUpperCase();
-  if (objectType === "packages") {
-    if (upper.includes("PACKAGE BODY")) return "Package Body";
-    return "Package Spec";
-  }
-  return TYPE_LABELS[objectType];
-}
 
 // ─── Table view ─────────────────────────────────────────────────────
 
@@ -356,26 +342,6 @@ function EmptySection({ message }: { message: string }) {
 }
 
 // ─── Source code view ───────────────────────────────────────────────
-
-function SourceView({ source }: { source: string }) {
-  if (!source.trim()) {
-    return (
-      <div style={centeredStyle}>
-        <span style={{ fontStyle: "italic" }}>No source code available</span>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ height: "100%", minHeight: 220 }}>
-      <SqlCodeEditor
-        value={source}
-        readOnly
-        showScopeLines={false}
-      />
-    </div>
-  );
-}
 
 // ─── Styles ─────────────────────────────────────────────────────────
 

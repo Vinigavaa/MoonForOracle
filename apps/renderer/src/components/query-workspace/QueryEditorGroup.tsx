@@ -11,6 +11,7 @@ import type {
 
 interface QueryEditorGroupProps {
   group: EditorGroup;
+  groupCount: number;
   isActive: boolean;
   isConnected: boolean;
   activeConnectionId: string | null;
@@ -37,6 +38,7 @@ export interface QueryEditorGroupHandle {
 export const QueryEditorGroup = memo(forwardRef<QueryEditorGroupHandle, QueryEditorGroupProps>(function QueryEditorGroup(
   {
     group,
+    groupCount,
     isActive,
     isConnected,
     activeConnectionId,
@@ -60,16 +62,21 @@ export const QueryEditorGroup = memo(forwardRef<QueryEditorGroupHandle, QueryEdi
   const activeTab = group.tabs.find((tab) => tab.id === group.activeTabId) ?? group.tabs[0] ?? null;
 
   useImperativeHandle(ref, () => ({
-    focus: () => paneRef.current?.focus(),
-    executeActive: () => paneRef.current?.executeActive(),
-    executeAll: () => paneRef.current?.executeAll(),
+    focus: () => {
+      paneRef.current?.focus();
+    },
+    executeActive: () => {
+      paneRef.current?.executeActive();
+    },
+    executeAll: () => {
+      paneRef.current?.executeAll();
+    },
   }), []);
 
   const showDropOverlay = dragState !== null;
   const dropZones: QueryDropPosition[] = allowSplitCreation
     ? ["center", "right"]
     : ["center"];
-
   return (
     <div
       onMouseDown={onActivateGroup}
@@ -108,22 +115,26 @@ export const QueryEditorGroup = memo(forwardRef<QueryEditorGroupHandle, QueryEdi
       />
 
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-        <QueryEditorPane
-          ref={paneRef}
-          activeTab={activeTab}
-          isConnected={isConnected}
-          activeConnectionId={activeConnectionId}
-          resultSplitRatio={group.resultSplitRatio}
-          onResultSplitRatioChange={onResultSplitRatioChange}
-          onUpdateTab={onUpdateTab}
-          onActivateGroup={onActivateGroup}
-          onOpenObject={onOpenObject}
-          onCloseActiveTab={() => {
-            if (activeTab) {
-              onTabClose(activeTab.id);
-            }
-          }}
-        />
+        {activeTab ? (
+          <QueryEditorPane
+            ref={paneRef}
+            activeTab={activeTab}
+            isConnected={isConnected}
+            activeConnectionId={activeConnectionId}
+            resultSplitRatio={group.resultSplitRatio}
+            onResultSplitRatioChange={onResultSplitRatioChange}
+            onUpdateTab={(tabId, patch) => onUpdateTab(tabId, patch)}
+            onActivateGroup={onActivateGroup}
+            onOpenObject={onOpenObject}
+            onCloseActiveTab={() => {
+              if (group.tabs.length > 1) {
+                onTabClose(activeTab.id);
+              }
+            }}
+          />
+        ) : (
+          <div style={{ flex: 1, minHeight: 0, background: "var(--panel-bg)" }} />
+        )}
 
         {showDropOverlay && (
           <div

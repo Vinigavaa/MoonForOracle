@@ -9,6 +9,7 @@ import type {
   SqlExecutionRequest,
   InferBindsRequest,
   CountRowsRequest,
+  CompileObjectRequest,
   DatabaseObjectType,
   AppError,
   IpcResult,
@@ -431,6 +432,15 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       return ok(detail);
     } catch (err) {
       return fail(logIpcError(IPC_CHANNELS.DB_GET_SOURCE, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DB_COMPILE_OBJECT, async (_event, request: CompileObjectRequest) => {
+    try {
+      const result = await useCases.compileObject(repo, request);
+      return ok(result);
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.DB_COMPILE_OBJECT, err));
     }
   });
 

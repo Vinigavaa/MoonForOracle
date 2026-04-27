@@ -15,6 +15,7 @@ import {
 } from "./queryWorkspaceTypes";
 
 const MIN_GROUP_WIDTH = 320;
+
 interface QueryWorkspaceProps {
   isConnected: boolean;
   activeConnectionId: string | null;
@@ -377,6 +378,7 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
             groupRefs.current[group.id] = instance;
           }}
           group={group}
+          groupCount={groups.length}
           isActive={isActiveGroup}
           isConnected={isConnected}
           activeConnectionId={activeConnectionId}

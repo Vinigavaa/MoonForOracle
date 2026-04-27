@@ -1,5 +1,14 @@
 import type { DatabaseRepository } from "@gavadb/oracle";
-import type { DatabaseObjectType, DatabaseObjectSummary, DatabaseObjectSuggestion, ObjectDetailResponse, SearchColumnsRequest, SqlColumnSuggestion } from "@gavadb/types";
+import type {
+  CompileObjectRequest,
+  CompileResult,
+  DatabaseObjectType,
+  DatabaseObjectSummary,
+  DatabaseObjectSuggestion,
+  ObjectDetailResponse,
+  SearchColumnsRequest,
+  SqlColumnSuggestion,
+} from "@gavadb/types";
 
 export async function listObjects(
   repo: DatabaseRepository,
@@ -22,6 +31,13 @@ export async function getObjectSql(
   name: string,
 ): Promise<string> {
   return repo.getObjectSql(type, name);
+}
+
+export async function compileObject(
+  repo: DatabaseRepository,
+  request: CompileObjectRequest,
+): Promise<CompileResult> {
+  return repo.compileObject(request);
 }
 
 export async function searchObjects(

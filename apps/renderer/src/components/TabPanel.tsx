@@ -20,11 +20,14 @@ export function TabPanel({ tabs, activeTab, onTabChange, onTabClose, children }:
       <div style={{
         height: "var(--tab-height)",
         display: "flex",
+        flexDirection: "row",
+        flexWrap: "nowrap",
         alignItems: "stretch",
         background: "var(--tab-bar-bg)",
         borderBottom: "1px solid var(--border-color)",
         flexShrink: 0,
-        overflow: "hidden",
+        overflowX: "auto",
+        overflowY: "hidden",
       }}>
         {tabs.map((tab) => {
           const isActive = tab.id === activeTab;
@@ -34,6 +37,7 @@ export function TabPanel({ tabs, activeTab, onTabChange, onTabClose, children }:
               onClick={() => onTabChange(tab.id)}
               style={{
                 display: "flex",
+                flex: "0 0 auto",
                 alignItems: "center",
                 gap: 6,
                 padding: "0 14px",

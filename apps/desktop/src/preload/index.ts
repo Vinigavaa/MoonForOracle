@@ -10,6 +10,7 @@ import type {
   SqlExecutionRequest,
   InferBindsRequest,
   CountRowsRequest,
+  CompileObjectRequest,
   UpdateRowRequest,
   SaveConnectionRequest,
   SearchColumnsRequest,
@@ -91,6 +92,9 @@ contextBridge.exposeInMainWorld("gavadb", {
 
   dbGetSource: (type: DatabaseObjectType, name: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.DB_GET_SOURCE, type, name),
+
+  dbCompileObject: (request: CompileObjectRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.DB_COMPILE_OBJECT, request),
 
   dbGetObjectSql: (type: DatabaseObjectType, name: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.DB_GET_OBJECT_SQL, type, name),

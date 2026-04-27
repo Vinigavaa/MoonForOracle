@@ -55,6 +55,7 @@ type SqlAutocompleteItem =
 export interface SqlCodeEditorHandle {
   getExecutionSnapshot: () => SqlEditorExecutionSnapshot;
   focus: () => void;
+  focusLine: (line: number, column?: number) => void;
 }
 
 // ─── Build CodeMirror theme from config ─────────────────────────────
@@ -571,6 +572,21 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
     },
     focus: () => {
       viewRef.current?.focus();
+    },
+    focusLine: (line, column = 1) => {
+      const view = viewRef.current;
+      if (!view) return;
+
+      const safeLine = Math.max(1, Math.min(line, view.state.doc.lines));
+      const lineInfo = view.state.doc.line(safeLine);
+      const safeColumn = Math.max(1, column);
+      const position = Math.min(lineInfo.from + safeColumn - 1, lineInfo.to);
+
+      view.dispatch({
+        selection: { anchor: position },
+        effects: EditorView.scrollIntoView(position, { y: "center" }),
+      });
+      view.focus();
     },
   }), [value]);
 

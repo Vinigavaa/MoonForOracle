@@ -23,6 +23,8 @@ import type {
   QueryExportResponse,
   QueryExportProgress,
   ObjectDetailResponse,
+  CompileObjectRequest,
+  CompileResult,
   UpdateRowRequest,
   AppError,
   IpcResult,
@@ -64,6 +66,7 @@ export interface IpcMainHandlers {
   "db:test-connection": (config: ConnectionConfig) => Promise<IpcResult<void>>;
   "db:list-objects": (type: DatabaseObjectType) => Promise<IpcResult<DatabaseObjectSummary[]>>;
   "db:get-source": (type: DatabaseObjectType, name: string) => Promise<IpcResult<ObjectDetailResponse>>;
+  "db:compile-object": (request: CompileObjectRequest) => Promise<IpcResult<CompileResult>>;
   "db:get-object-sql": (type: DatabaseObjectType, name: string) => Promise<IpcResult<string>>;
   "db:search-objects": (prefix: string, limit?: number) => Promise<IpcResult<DatabaseObjectSuggestion[]>>;
   "db:search-columns": (request: SearchColumnsRequest) => Promise<IpcResult<SqlColumnSuggestion[]>>;
@@ -138,6 +141,7 @@ export const IPC_CHANNELS = {
   DB_TEST_CONNECTION: "db:test-connection",
   DB_LIST_OBJECTS: "db:list-objects",
   DB_GET_SOURCE: "db:get-source",
+  DB_COMPILE_OBJECT: "db:compile-object",
   DB_GET_OBJECT_SQL: "db:get-object-sql",
   DB_SEARCH_OBJECTS: "db:search-objects",
   DB_SEARCH_COLUMNS: "db:search-columns",
@@ -189,6 +193,7 @@ export interface GavaDbApi {
   dbTestConnection: (config: ConnectionConfig) => Promise<IpcResult<void>>;
   dbListObjects: (type: DatabaseObjectType) => Promise<IpcResult<DatabaseObjectSummary[]>>;
   dbGetSource: (type: DatabaseObjectType, name: string) => Promise<IpcResult<ObjectDetailResponse>>;
+  dbCompileObject: (request: CompileObjectRequest) => Promise<IpcResult<CompileResult>>;
   dbGetObjectSql: (type: DatabaseObjectType, name: string) => Promise<IpcResult<string>>;
   dbSearchObjects: (prefix: string, limit?: number) => Promise<IpcResult<DatabaseObjectSuggestion[]>>;
   dbSearchColumns: (request: SearchColumnsRequest) => Promise<IpcResult<SqlColumnSuggestion[]>>;
