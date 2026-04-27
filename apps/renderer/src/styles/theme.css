@@ -245,5 +245,5 @@ textarea::placeholder {
 body.is-resizing,
 body.is-resizing * {
   user-select: none !important;
-  cursor: row-resize !important;
+  cursor: var(--app-resize-cursor, row-resize) !important;
 }

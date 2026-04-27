@@ -411,6 +411,8 @@ export function App() {
             <SqlEditor
               ref={sqlEditorRef}
               isConnected={isConnected}
+              activeConnectionId={activeConnectionId}
+              hasPendingTransaction={transactionState.hasPendingChanges}
               executeTriggerRef={executeTriggerRef}
               executeAllTriggerRef={executeAllTriggerRef}
               onOpenObject={handleObjectSelect}

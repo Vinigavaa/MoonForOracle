@@ -24,6 +24,7 @@ interface SqlCodeEditorProps {
   onExecuteAll?: () => void;
   onSave?: () => void;
   onSaveAs?: () => void;
+  onCloseTab?: () => void;
   onOpenObject?: (name: string) => void | Promise<void>;
   onSearchObjectsByPrefix?: (prefix: string, limit?: number) => Promise<DatabaseObjectSuggestion[]>;
   onSearchColumns?: (request: SearchColumnsRequest) => Promise<SqlColumnSuggestion[]>;
@@ -293,6 +294,7 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
   onExecuteAll,
   onSave,
   onSaveAs,
+  onCloseTab,
   onOpenObject,
   onSearchObjectsByPrefix,
   onSearchColumns,
@@ -311,6 +313,7 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
   const onExecuteAllRef = useRef(onExecuteAll);
   const onSaveRef = useRef(onSave);
   const onSaveAsRef = useRef(onSaveAs);
+  const onCloseTabRef = useRef(onCloseTab);
   const onOpenObjectRef = useRef(onOpenObject);
   const onSearchObjectsByPrefixRef = useRef(onSearchObjectsByPrefix);
   const onSearchColumnsRef = useRef(onSearchColumns);
@@ -361,6 +364,7 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
   onExecuteAllRef.current = onExecuteAll;
   onSaveRef.current = onSave;
   onSaveAsRef.current = onSaveAs;
+  onCloseTabRef.current = onCloseTab;
   onOpenObjectRef.current = onOpenObject;
   onSearchObjectsByPrefixRef.current = onSearchObjectsByPrefix;
   onSearchColumnsRef.current = onSearchColumns;
@@ -639,6 +643,14 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
           key: "Shift-Ctrl-Enter",
           mac: "Shift-Cmd-Enter",
           run: () => { onExecuteAllRef.current?.(); return true; },
+        },
+        {
+          key: "Ctrl-w",
+          mac: "Cmd-w",
+          run: () => {
+            onCloseTabRef.current?.();
+            return true;
+          },
         },
         {
           key: "Tab",

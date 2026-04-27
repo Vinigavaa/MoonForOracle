@@ -48,12 +48,12 @@ export function AutoUpdateDialog({ status, onDownload, onInstall, onDismiss }: A
       <section style={dialogStyle} role="dialog" aria-modal="true" aria-labelledby="auto-update-title">
         <div style={headerStyle}>
           <div>
-            <div style={eyebrowStyle}>Atualizacao do aplicativo</div>
+            <div style={eyebrowStyle}>Atualização do aplicativo</div>
             <h2 id="auto-update-title" style={titleStyle}>
-              {status.kind === "available" && "Nova versao disponivel"}
-              {status.kind === "downloading" && "Baixando atualizacao"}
-              {status.kind === "downloaded" && "Atualizacao pronta"}
-              {status.kind === "error" && "Nao foi possivel atualizar"}
+              {status.kind === "available" && "Nova versão disponível"}
+              {status.kind === "downloading" && "Baixando atualização"}
+              {status.kind === "downloaded" && "Atualização pronta"}
+              {status.kind === "error" && "Não foi possível atualizar"}
             </h2>
           </div>
           {!isDownloading && (
@@ -66,7 +66,7 @@ export function AutoUpdateDialog({ status, onDownload, onInstall, onDismiss }: A
         {status.kind === "available" && (
           <>
             <p style={bodyStyle}>
-              A versao {status.version} esta disponivel para instalacao. Voce pode baixar agora e continuar usando o app enquanto o download acontece.
+              A versão {status.version} está disponível para instalação. Você pode baixar agora e continuar usando o app enquanto o download acontece.
             </p>
             {status.releaseNotes && <pre style={releaseNotesStyle}>{formatReleaseNotes(status.releaseNotes)}</pre>}
             <div style={actionsStyle}>
@@ -82,7 +82,7 @@ export function AutoUpdateDialog({ status, onDownload, onInstall, onDismiss }: A
 
         {status.kind === "downloading" && (
           <>
-            <p style={bodyStyle}>A atualizacao esta sendo baixada em segundo plano.</p>
+            <p style={bodyStyle}>A atualização está sendo baixada em segundo plano.</p>
             <div style={progressTrackStyle}>
               <div style={{ ...progressFillStyle, width: `${progress}%` }} />
             </div>
@@ -98,7 +98,7 @@ export function AutoUpdateDialog({ status, onDownload, onInstall, onDismiss }: A
         {status.kind === "downloaded" && (
           <>
             <p style={bodyStyle}>
-              A versao {status.version} foi baixada. Reinicie o aplicativo para concluir a instalacao.
+              A versão {status.version} foi baixada. Reinicie o aplicativo para concluir a instalação.
             </p>
             <div style={actionsStyle}>
               <button type="button" onClick={onDismiss}>
