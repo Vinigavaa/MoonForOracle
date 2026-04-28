@@ -1,6 +1,7 @@
 import type {
   BindMetadata,
   BindParameterValue,
+  DatabaseObjectType,
   QueryResultRow,
   SqlExecutionResponse,
 } from "@gavadb/types";
@@ -17,6 +18,7 @@ export interface BindInputCacheEntry {
 }
 
 export interface QueryTabState {
+  kind: "query";
   id: string;
   sql: string;
   filePath: string | null;
@@ -38,10 +40,28 @@ export interface QueryTabState {
   hasPendingTransaction: boolean;
 }
 
+export interface ObjectTabState {
+  kind: "object";
+  id: string;
+  objectType: DatabaseObjectType;
+  objectName: string;
+  connectionId: string | null;
+}
+
+export interface ObjectSqlTabState {
+  kind: "object-sql";
+  id: string;
+  objectType: DatabaseObjectType;
+  objectName: string;
+  connectionId: string | null;
+}
+
+export type WorkspaceTabState = QueryTabState | ObjectTabState | ObjectSqlTabState;
+
 export interface EditorGroup {
   id: string;
   activeTabId: string | null;
-  tabs: QueryTabState[];
+  tabs: WorkspaceTabState[];
   resultSplitRatio: number;
 }
 
@@ -68,6 +88,7 @@ export interface QueryWorkspaceTabSummary {
 
 export function createQueryTab(connectionId: string | null = null, partial?: Partial<QueryTabState>): QueryTabState {
   return {
+    kind: "query",
     id: partial?.id ?? generateId(),
     sql: partial?.sql ?? "",
     filePath: partial?.filePath ?? null,
@@ -90,7 +111,37 @@ export function createQueryTab(connectionId: string | null = null, partial?: Par
   };
 }
 
-export function createEditorGroup(connectionId: string | null = null, initialTab?: QueryTabState): EditorGroup {
+export function createObjectTab(
+  objectType: DatabaseObjectType,
+  objectName: string,
+  connectionId: string | null = null,
+  partial?: Partial<ObjectTabState>,
+): ObjectTabState {
+  return {
+    kind: "object",
+    id: partial?.id ?? generateId(),
+    objectType,
+    objectName,
+    connectionId: partial?.connectionId ?? connectionId,
+  };
+}
+
+export function createObjectSqlTab(
+  objectType: DatabaseObjectType,
+  objectName: string,
+  connectionId: string | null = null,
+  partial?: Partial<ObjectSqlTabState>,
+): ObjectSqlTabState {
+  return {
+    kind: "object-sql",
+    id: partial?.id ?? generateId(),
+    objectType,
+    objectName,
+    connectionId: partial?.connectionId ?? connectionId,
+  };
+}
+
+export function createEditorGroup(connectionId: string | null = null, initialTab?: WorkspaceTabState): EditorGroup {
   const tab = initialTab ?? createQueryTab(connectionId);
   return {
     id: generateId(),
@@ -114,6 +165,16 @@ export function getFileName(filePath: string): string {
   return filePath.split(/[\\/]/).pop() || filePath;
 }
 
-export function getQueryTabLabel(filePath: string | null, queryIndex: number): string {
-  return filePath ? getFileName(filePath) : `Query ${queryIndex}`;
+export function getWorkspaceTabLabel(tab: WorkspaceTabState, queryIndex: number): string {
+  if (tab.kind === "query") {
+    return tab.filePath ? getFileName(tab.filePath) : `Query ${queryIndex}`;
+  }
+  if (tab.kind === "object") {
+    return tab.objectName;
+  }
+  return `${tab.objectName} SQL`;
+}
+
+export function isQueryTab(tab: WorkspaceTabState): tab is QueryTabState {
+  return tab.kind === "query";
 }

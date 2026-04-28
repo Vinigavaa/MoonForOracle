@@ -46,7 +46,7 @@ export function ObjectSqlViewer({ objectType, objectName }: ObjectSqlViewerProps
   }, [objectName, objectType]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div style={rootStyle}>
       <div style={headerStyle}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
           <span style={badgeStyle}>{objectType === "tables" ? "Table SQL" : "View SQL"}</span>
@@ -54,7 +54,7 @@ export function ObjectSqlViewer({ objectType, objectName }: ObjectSqlViewerProps
         </div>
       </div>
 
-      <div style={{ flex: 1, overflow: "hidden", background: "var(--code-viewer-bg)" }}>
+      <div style={editorHostStyle}>
         {loading && (
           <div style={centeredStyle}>
             <span style={{ animation: "pulse 1s infinite" }}>Loading SQL definition...</span>
@@ -66,12 +66,43 @@ export function ObjectSqlViewer({ objectType, objectName }: ObjectSqlViewerProps
           </div>
         )}
         {!loading && !error && (
-          <SqlCodeEditor value={sql} readOnly />
+          <div style={editorFillStyle}>
+            <SqlCodeEditor value={sql} readOnly />
+          </div>
         )}
       </div>
     </div>
   );
 }
+
+const rootStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  flex: 1,
+  width: "100%",
+  height: "100%",
+  minWidth: 0,
+  minHeight: 0,
+  overflow: "hidden",
+};
+
+const editorHostStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  flex: 1,
+  width: "100%",
+  minWidth: 0,
+  minHeight: 0,
+  overflow: "hidden",
+  background: "var(--code-viewer-bg)",
+};
+
+const editorFillStyle: React.CSSProperties = {
+  flex: 1,
+  width: "100%",
+  minWidth: 0,
+  minHeight: 0,
+};
 
 const headerStyle: React.CSSProperties = {
   padding: "6px 14px",
@@ -84,6 +115,7 @@ const headerStyle: React.CSSProperties = {
   justifyContent: "space-between",
   flexShrink: 0,
   gap: 10,
+  minWidth: 0,
 };
 
 const badgeStyle: React.CSSProperties = {

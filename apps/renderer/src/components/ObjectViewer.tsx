@@ -40,9 +40,10 @@ const TYPE_COLORS: Record<DatabaseObjectType, string> = {
 export function ObjectViewer({ objectType, objectName, activeConnectionId = null, onViewSql }: ObjectViewerProps) {
   const { detail, error, loading, reload } = useObjectDetail(objectType, objectName);
   const showToolbar = detail?.kind !== "source";
+  const isSourceDetail = detail?.kind === "source";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div style={viewerRootStyle}>
       {showToolbar && (
         <div style={objectToolbarStyle}>
           <span style={{
@@ -65,7 +66,12 @@ export function ObjectViewer({ objectType, objectName, activeConnectionId = null
         </div>
       )}
 
-      <div style={{ flex: 1, overflow: "auto", background: "var(--code-viewer-bg)" }}>
+      <div
+        style={{
+          ...viewerContentStyle,
+          overflow: isSourceDetail ? "hidden" : "auto",
+        }}
+      >
         {loading && (
           <div style={centeredStyle}>
             <span style={{ animation: "pulse 1s infinite" }}>Loading...</span>
@@ -107,7 +113,7 @@ function TableView({
   }, [detail.objectName, onViewSql]);
 
   return (
-    <div style={{ padding: 14, display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={scrollSectionStyle}>
       <section>
         <SectionHeader
           title="Columns"
@@ -147,8 +153,8 @@ function ViewView({
   }, [detail.objectName, onViewSql]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 0, height: "100%" }}>
-      <div style={{ padding: 14, borderBottom: "1px solid var(--border-subtle)" }}>
+    <div style={viewRootStyle}>
+      <div style={scrollSectionStyle}>
         <SectionHeader
           title="Columns"
           subtitle={detail.columns.length > 0 ? `${detail.columns.length} column(s)` : "No columns found"}
@@ -195,46 +201,43 @@ function ColumnTable({ columns }: { columns: ColumnInfo[] }) {
   const sortArrow = sortDirection === "asc" ? " \u25B2" : sortDirection === "desc" ? " \u25BC" : "";
 
   return (
-    <table style={{
-      width: "100%",
-      borderCollapse: "collapse",
-      fontFamily: "var(--font-ui)",
-      fontSize: "var(--font-size-sm)",
-    }}>
-      <thead>
-        <tr>
-          <th style={thStyle}>#</th>
-          <th style={sortableColumnHeaderStyle} onClick={toggleColumnSort} title="Sort by column name">
-            Column
-            {sortArrow && <span style={sortArrowStyle}>{sortArrow}</span>}
-          </th>
-          <th style={thStyle}>Data Type</th>
-          <th style={thStyle}>Nullable</th>
-        </tr>
-      </thead>
-      <tbody>
-        {displayColumns.map((col, i) => (
-          <tr key={col.name} style={{ background: i % 2 === 0 ? "transparent" : "var(--grid-alt-row-bg)" }}>
-            <td style={{ ...tdStyle, color: "var(--text-muted)", width: 40, textAlign: "right" }}>
-              {col.position}
-            </td>
-            <td style={{ ...tdStyle, color: "var(--text-primary)", fontWeight: 500 }}>
-              {col.name}
-            </td>
-            <td style={{ ...tdStyle, color: "var(--accent)" }}>
-              {col.dataType}
-            </td>
-            <td style={{ ...tdStyle, width: 70, textAlign: "center" }}>
-              {col.nullable ? (
-                <span style={{ color: "var(--text-muted)" }}>Yes</span>
-              ) : (
-                <span style={{ color: "var(--warning)", fontWeight: 500 }}>No</span>
-              )}
-            </td>
+    <div style={tableScrollHostStyle}>
+      <table style={columnTableStyle}>
+        <thead>
+          <tr>
+            <th style={thStyle}>#</th>
+            <th style={sortableColumnHeaderStyle} onClick={toggleColumnSort} title="Sort by column name">
+              Column
+              {sortArrow && <span style={sortArrowStyle}>{sortArrow}</span>}
+            </th>
+            <th style={thStyle}>Data Type</th>
+            <th style={thStyle}>Nullable</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {displayColumns.map((col, i) => (
+            <tr key={col.name} style={{ background: i % 2 === 0 ? "transparent" : "var(--grid-alt-row-bg)" }}>
+              <td style={{ ...tdStyle, color: "var(--text-muted)", width: 40, textAlign: "right" }}>
+                {col.position}
+              </td>
+              <td style={{ ...tdStyle, color: "var(--text-primary)", fontWeight: 500 }}>
+                {col.name}
+              </td>
+              <td style={{ ...tdStyle, color: "var(--accent)" }}>
+                {col.dataType}
+              </td>
+              <td style={{ ...tdStyle, width: 70, textAlign: "center" }}>
+                {col.nullable ? (
+                  <span style={{ color: "var(--text-muted)" }}>Yes</span>
+                ) : (
+                  <span style={{ color: "var(--warning)", fontWeight: 500 }}>No</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -331,6 +334,59 @@ function EmptySection({ message }: { message: string }) {
 const centeredStyle: React.CSSProperties = {
   display: "flex", alignItems: "center", justifyContent: "center",
   height: "100%", color: "var(--text-muted)", fontSize: "var(--font-size-sm)",
+};
+
+const viewerRootStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  flex: 1,
+  width: "100%",
+  height: "100%",
+  minWidth: 0,
+  minHeight: 0,
+  overflow: "hidden",
+};
+
+const viewerContentStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  flex: 1,
+  width: "100%",
+  minWidth: 0,
+  minHeight: 0,
+  background: "var(--code-viewer-bg)",
+};
+
+const scrollSectionStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 16,
+  width: "100%",
+  minWidth: 0,
+  padding: 14,
+  boxSizing: "border-box",
+};
+
+const viewRootStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  width: "100%",
+  minWidth: 0,
+  minHeight: 0,
+};
+
+const tableScrollHostStyle: React.CSSProperties = {
+  width: "100%",
+  minWidth: 0,
+  overflow: "auto",
+};
+
+const columnTableStyle: React.CSSProperties = {
+  width: "max-content",
+  minWidth: "100%",
+  borderCollapse: "collapse",
+  fontFamily: "var(--font-ui)",
+  fontSize: "var(--font-size-sm)",
 };
 
 const objectToolbarStyle: React.CSSProperties = {

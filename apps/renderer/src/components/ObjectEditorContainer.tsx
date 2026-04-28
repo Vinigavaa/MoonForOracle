@@ -130,13 +130,15 @@ export function ObjectEditorContainer({ detail, connectionId }: ObjectEditorCont
       />
 
       <div style={editorHostStyle}>
-        <SqlCodeEditor
-          ref={editorRef}
-          value={activeTab.currentSource}
-          onChange={(value) => updateActiveTab({ currentSource: value })}
-          placeholder="Source code"
-          showScopeLines={false}
-        />
+        <div style={editorFillStyle}>
+          <SqlCodeEditor
+            ref={editorRef}
+            value={activeTab.currentSource}
+            onChange={(value) => updateActiveTab({ currentSource: value })}
+            placeholder="Source code"
+            showScopeLines={false}
+          />
+        </div>
       </div>
 
       <ObjectCompileErrorPanel
@@ -203,14 +205,28 @@ function resolveDefaultActiveTabId(tabs: ObjectSourceTab[]): string | null {
 const rootStyle: React.CSSProperties = {
   display: "flex",
   flexDirection: "column",
+  flex: 1,
+  width: "100%",
   height: "100%",
+  minWidth: 0,
   minHeight: 0,
+  overflow: "hidden",
 };
 
 const editorHostStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
   flex: 1,
+  minWidth: 0,
   minHeight: 0,
   overflow: "hidden",
+};
+
+const editorFillStyle: React.CSSProperties = {
+  flex: 1,
+  width: "100%",
+  minWidth: 0,
+  minHeight: 0,
 };
 
 const errorPanelStyle: React.CSSProperties = {
@@ -218,6 +234,7 @@ const errorPanelStyle: React.CSSProperties = {
   background: "var(--panel-bg)",
   maxHeight: 180,
   overflow: "hidden",
+  minWidth: 0,
 };
 
 const errorPanelHeaderStyle: React.CSSProperties = {
@@ -263,6 +280,7 @@ const statusBarStyle: React.CSSProperties = {
   color: "var(--text-muted)",
   fontSize: 11,
   background: "var(--panel-bg)",
+  minWidth: 0,
 };
 
 const emptyStateStyle: React.CSSProperties = {

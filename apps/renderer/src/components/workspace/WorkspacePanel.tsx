@@ -33,7 +33,7 @@ export function WorkspacePanel({ onOpenFile }: WorkspacePanelProps) {
   const [dropTargetPath, setDropTargetPath] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [sectionExpanded, setSectionExpanded] = useState(true);
+  const [sectionExpanded, setSectionExpanded] = useState(false);
   const editSessionRef = useRef(0);
   const rootPath = tree.root?.path ?? null;
 

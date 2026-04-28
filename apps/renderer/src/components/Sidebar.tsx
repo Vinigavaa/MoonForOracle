@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Blocks, ChevronDown, Globe, Package, Play, Table, type LucideIcon } from "lucide-react";
+import { Blocks, ChevronDown, DatabaseZap, FolderCode, Globe, Menu, Package, PackageSearch, Play, Table, type LucideIcon } from "lucide-react";
 import type { DatabaseObjectType, DatabaseObjectSummary, SavedConnection, WorkspaceReadFileResponse } from "@gavadb/types";
 import { useObjectList, type SectionState } from "../hooks/useObjectList";
 import { loadSidebarPreferences, saveSidebarPreferences } from "../lib/sidebarPreferences";
@@ -89,17 +89,17 @@ export function Sidebar({
     return (
       <div style={collapsedSidebarStyle}>
         <button onClick={onToggleCollapse} title="Expand sidebar" aria-label="Expand sidebar" style={collapseToggleButtonStyle}>
-          {"\u203A"}
+          <Menu size={17} strokeWidth={2} aria-hidden="true" />
         </button>
         <div style={collapsedSidebarIconGroupStyle}>
           <div title="Connections" style={collapsedSidebarIconStyle}>
-            {"\u26A1"}
+            <DatabaseZap size={15} strokeWidth={1.9} aria-hidden="true" />
           </div>
           <div title="Workspace files" style={collapsedSidebarIconStyle}>
-            {"\u25A3"}
+            <FolderCode size={15} strokeWidth={1.9} aria-hidden="true" />
           </div>
           <div title="Database Objects" style={collapsedSidebarIconStyle}>
-            {"\u25A6"}
+            <PackageSearch size={15} strokeWidth={1.9} aria-hidden="true" />
           </div>
         </div>
         <div style={collapsedSidebarFooterStyle}>
@@ -124,11 +124,12 @@ export function Sidebar({
       flexDirection: "column",
       flexShrink: 0,
       overflow: "hidden",
+      transition: "width 180ms ease",
     }}>
       <div style={sidebarHeaderRowStyle}>
         <span style={sidebarHeaderLabelStyle}>Workspace</span>
         <button onClick={onToggleCollapse} title="Collapse sidebar" aria-label="Collapse sidebar" style={collapseToggleButtonStyle}>
-          {"\u2039"}
+          <Menu size={17} strokeWidth={2} aria-hidden="true" />
         </button>
       </div>
       {/* ── Saved Connections section ── */}
@@ -527,17 +528,17 @@ const sidebarHeaderLabelStyle: React.CSSProperties = {
 };
 
 const collapseToggleButtonStyle: React.CSSProperties = {
-  width: 24,
-  height: 24,
+  width: 28,
+  height: 28,
   padding: 0,
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
   background: "transparent",
-  border: "1px solid var(--border-subtle)",
+  border: "none",
   color: "var(--text-muted)",
   lineHeight: 1,
-  fontSize: 16,
+  fontSize: 18,
   flexShrink: 0,
 };
 
@@ -552,6 +553,7 @@ const collapsedSidebarStyle: React.CSSProperties = {
   overflow: "hidden",
   padding: "6px 0",
   gap: 10,
+  transition: "width 180ms ease",
 };
 
 const collapsedSidebarIconGroupStyle: React.CSSProperties = {

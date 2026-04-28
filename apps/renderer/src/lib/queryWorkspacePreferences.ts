@@ -3,8 +3,10 @@ import {
   createEditorGroup,
   createQueryTab,
   type EditorGroup,
+  type QueryTabState,
   type QueryWorkspaceMode,
   type QueryWorkspaceState,
+  isQueryTab,
 } from "../components/query-workspace/queryWorkspaceTypes";
 
 const STORAGE_KEY = "gavadb.query-workspace.v2";
@@ -49,7 +51,7 @@ export function saveQueryWorkspacePreferences(state: QueryWorkspaceState): void 
       id: group.id,
       activeTabId: group.activeTabId,
       resultSplitRatio: group.resultSplitRatio,
-      tabs: group.tabs.map((tab) => ({
+      tabs: group.tabs.filter(isQueryTab).map((tab) => ({
         id: tab.id,
         sql: tab.sql,
         filePath: tab.filePath,
@@ -94,7 +96,7 @@ function normalizeGroup(value: unknown, connectionId: string | null): EditorGrou
 
   const record = value as Partial<PersistedEditorGroup>;
   const tabs = Array.isArray(record.tabs)
-    ? record.tabs.map((tab) => normalizeTab(tab, connectionId)).filter((tab) => tab !== null)
+    ? record.tabs.map((tab) => normalizeTab(tab, connectionId)).filter((tab): tab is QueryTabState => tab !== null)
     : [];
 
   if (tabs.length === 0) {

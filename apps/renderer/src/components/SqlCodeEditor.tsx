@@ -26,6 +26,7 @@ interface SqlCodeEditorProps {
   onSaveAs?: () => void;
   onCloseTab?: () => void;
   onOpenObject?: (name: string) => void | Promise<void>;
+  onCanOpenObject?: (name: string) => Promise<boolean>;
   onSearchObjectsByPrefix?: (prefix: string, limit?: number) => Promise<DatabaseObjectSuggestion[]>;
   onSearchColumns?: (request: SearchColumnsRequest) => Promise<SqlColumnSuggestion[]>;
   onExecutionContextChange?: (snapshot: SqlEditorExecutionSnapshot) => void;
@@ -297,6 +298,7 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
   onSaveAs,
   onCloseTab,
   onOpenObject,
+  onCanOpenObject,
   onSearchObjectsByPrefix,
   onSearchColumns,
   onExecutionContextChange,
@@ -316,6 +318,7 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
   const onSaveAsRef = useRef(onSaveAs);
   const onCloseTabRef = useRef(onCloseTab);
   const onOpenObjectRef = useRef(onOpenObject);
+  const onCanOpenObjectRef = useRef(onCanOpenObject);
   const onSearchObjectsByPrefixRef = useRef(onSearchObjectsByPrefix);
   const onSearchColumnsRef = useRef(onSearchColumns);
   const onExecutionContextChangeRef = useRef(onExecutionContextChange);
@@ -329,6 +332,9 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
   const hoveredElementRef = useRef<HTMLElement | null>(null);
   const hoveredWordRef = useRef<string | null>(null);
   const lastMouseEventRef = useRef<MouseEvent | null>(null);
+  const hoverValidationRequestRef = useRef(0);
+  const openabilityCacheRef = useRef<Map<string, boolean>>(new Map());
+  const openabilityPendingRef = useRef<Map<string, Promise<boolean>>>(new Map());
   const parsedStatementsRef = useRef(buildExecutionSnapshot(value, 0, 0, 0).statements);
   const parsedDocRef = useRef(value);
   const parseTimeoutRef = useRef<number | null>(null);
@@ -367,6 +373,7 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
   onSaveAsRef.current = onSaveAs;
   onCloseTabRef.current = onCloseTab;
   onOpenObjectRef.current = onOpenObject;
+  onCanOpenObjectRef.current = onCanOpenObject;
   onSearchObjectsByPrefixRef.current = onSearchObjectsByPrefix;
   onSearchColumnsRef.current = onSearchColumns;
   onExecutionContextChangeRef.current = onExecutionContextChange;
@@ -533,6 +540,83 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
     return true;
   }
 
+  function refreshObjectAutocompleteForDocument(view: EditorView): boolean {
+    const currentAutocomplete = autocompleteRef.current;
+    const objectSearchFn = onSearchObjectsByPrefixRef.current;
+    if (!currentAutocomplete.open || currentAutocomplete.kind !== "object" || !currentAutocomplete.target) {
+      return false;
+    }
+    if (!objectSearchFn || disabledRef.current || readOnlyRef.current) {
+      closeAutocomplete();
+      return true;
+    }
+
+    const cursor = view.state.selection.main.head;
+    const document = view.state.doc.toString();
+    const target = calculateAutocompleteTarget(document, cursor, { allowEmptyPrefix: true });
+    if (!target) {
+      closeAutocomplete();
+      return true;
+    }
+
+    const context = detectSqlAutocompleteContext(document, cursor, target);
+    if (context.kind !== "object") {
+      closeAutocomplete();
+      return true;
+    }
+
+    const coords = view.coordsAtPos(target.anchor) ?? view.coordsAtPos(cursor);
+    const containerRect = containerRef.current?.getBoundingClientRect();
+    const left = coords && containerRect ? coords.left - containerRect.left : currentAutocomplete.left;
+    const top = coords && containerRect ? coords.bottom - containerRect.top + 6 : currentAutocomplete.top;
+    const query = context.query;
+    const requestId = ++autocompleteRequestRef.current;
+
+    setAutocomplete((current) => {
+      if (!current.open || current.kind !== "object") return current;
+      return {
+        ...current,
+        loading: true,
+        query,
+        top,
+        left,
+        target,
+        selectedIndex: 0,
+      };
+    });
+
+    void objectSearchFn(query, 20)
+      .then((results) => {
+        if (autocompleteRequestRef.current !== requestId) return;
+        const items = results.map((value: DatabaseObjectSuggestion) => ({ kind: "object", value } satisfies SqlAutocompleteItem));
+        setAutocomplete((current) => {
+          if (!current.open || current.kind !== "object" || current.query !== query) return current;
+          return {
+            ...current,
+            loading: false,
+            items,
+            sourceItems: items,
+            selectedIndex: 0,
+          };
+        });
+      })
+      .catch(() => {
+        if (autocompleteRequestRef.current !== requestId) return;
+        setAutocomplete((current) => {
+          if (!current.open || current.kind !== "object" || current.query !== query) return current;
+          return {
+            ...current,
+            loading: false,
+            items: [],
+            sourceItems: [],
+            selectedIndex: 0,
+          };
+        });
+      });
+
+    return true;
+  }
+
   function refreshColumnAutocompleteForDocument(view: EditorView): boolean {
     const currentAutocomplete = autocompleteRef.current;
     if (!currentAutocomplete.open || currentAutocomplete.kind !== "column" || !currentAutocomplete.target) {
@@ -600,6 +684,17 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
     hoveredWordRef.current = null;
   }
 
+  function applyHoverFeedback(target: HTMLElement, word: string) {
+    if (hoveredElementRef.current !== target) {
+      clearHoverFeedback();
+      hoveredElementRef.current = target;
+    }
+
+    hoveredWordRef.current = word;
+    target.style.textDecoration = "underline";
+    target.style.cursor = "pointer";
+  }
+
   function isModifierPressed(event: MouseEvent | KeyboardEvent) {
     return navigator.platform.includes("Mac") ? event.metaKey : event.ctrlKey;
   }
@@ -610,28 +705,65 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
     return extractObjectReferenceAtCursor(view.state.doc.toString(), pos);
   }
 
-  function updateHoverFeedback(event: MouseEvent) {
+  async function canOpenResolvedObject(name: string): Promise<boolean> {
+    const resolver = onCanOpenObjectRef.current;
+    if (!resolver) return true;
+
+    const key = normalizeObjectLookupKey(name);
+    const cached = openabilityCacheRef.current.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const pending = openabilityPendingRef.current.get(key);
+    if (pending) {
+      return pending;
+    }
+
+    const request = resolver(name)
+      .then((result) => {
+        const allowed = Boolean(result);
+        openabilityCacheRef.current.set(key, allowed);
+        openabilityPendingRef.current.delete(key);
+        return allowed;
+      })
+      .catch(() => {
+        openabilityCacheRef.current.set(key, false);
+        openabilityPendingRef.current.delete(key);
+        return false;
+      });
+
+    openabilityPendingRef.current.set(key, request);
+    return request;
+  }
+
+  async function updateHoverFeedback(event: MouseEvent) {
     const view = viewRef.current;
     const target = event.target instanceof HTMLElement ? event.target : null;
     if (!view || !target || disabledRef.current || readOnlyRef.current || !isModifierPressed(event)) {
+      hoverValidationRequestRef.current += 1;
       clearHoverFeedback();
       return;
     }
 
     const objectRef = getObjectReferenceAtMouseEvent(view, event);
     if (!objectRef) {
+      hoverValidationRequestRef.current += 1;
       clearHoverFeedback();
       return;
     }
 
-    if (hoveredElementRef.current !== target) {
+    const requestId = ++hoverValidationRequestRef.current;
+    const canOpen = await canOpenResolvedObject(objectRef.text);
+    if (requestId !== hoverValidationRequestRef.current) {
+      return;
+    }
+    if (!canOpen) {
       clearHoverFeedback();
-      hoveredElementRef.current = target;
+      return;
     }
 
-    hoveredWordRef.current = objectRef.text;
-    target.style.textDecoration = "underline";
-    target.style.cursor = "pointer";
+    applyHoverFeedback(target, objectRef.text);
   }
 
   // Create editor once
@@ -741,8 +873,9 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
       highlightCompartmentRef.current.of(buildHighlightStyle(themeConfig)),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
-          const keptColumnAutocompleteOpen = refreshColumnAutocompleteForDocument(update.view);
-          if (!keptColumnAutocompleteOpen) {
+          const keptObjectAutocompleteOpen = refreshObjectAutocompleteForDocument(update.view);
+          const keptColumnAutocompleteOpen = keptObjectAutocompleteOpen ? false : refreshColumnAutocompleteForDocument(update.view);
+          if (!keptObjectAutocompleteOpen && !keptColumnAutocompleteOpen) {
             closeAutocomplete();
           }
           onChangeRef.current?.(update.state.doc.toString());
@@ -765,7 +898,7 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
 
     const handleMouseMove = (event: MouseEvent) => {
       lastMouseEventRef.current = event;
-      updateHoverFeedback(event);
+      void updateHoverFeedback(event);
     };
     const handleMouseLeave = () => {
       lastMouseEventRef.current = null;
@@ -775,16 +908,17 @@ export const SqlCodeEditor = memo(forwardRef<SqlCodeEditorHandle, SqlCodeEditorP
       if (isModifierPressed(event)) {
         const lastMouseEvent = lastMouseEventRef.current;
         if (lastMouseEvent) {
-          updateHoverFeedback(lastMouseEvent);
+          void updateHoverFeedback(lastMouseEvent);
         }
         return;
       }
       clearHoverFeedback();
     };
-    const handleClick = (event: MouseEvent) => {
+    const handleClick = async (event: MouseEvent) => {
       if (disabledRef.current || readOnlyRef.current || !isModifierPressed(event)) return;
       const objectRef = getObjectReferenceAtMouseEvent(view, event);
       if (!objectRef) return;
+      if (!(await canOpenResolvedObject(objectRef.text))) return;
       event.preventDefault();
       onOpenObjectRef.current?.(objectRef.text);
     };
@@ -980,6 +1114,12 @@ function filterColumnAutocompleteItems(items: SqlAutocompleteItem[], query: stri
 
 function normalizeAutocompleteText(value: string): string {
   return value.trim().replace(/^"+|"+$/g, "").toUpperCase();
+}
+
+function normalizeObjectLookupKey(value: string): string {
+  const trimmed = value.trim();
+  const objectPart = trimmed.includes(".") ? (trimmed.split(".").pop() ?? trimmed) : trimmed;
+  return objectPart.replace(/^"+|"+$/g, "").toUpperCase();
 }
 
 function getAutocompleteItemKey(item: SqlAutocompleteItem): string {

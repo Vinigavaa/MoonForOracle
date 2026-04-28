@@ -12,21 +12,21 @@ export function loadSidebarPreferences(): SidebarPreferences {
     if (!raw) {
       return {
         collapsed: false,
-        connectionsExpanded: true,
-        databaseObjectsExpanded: true,
+        connectionsExpanded: false,
+        databaseObjectsExpanded: false,
       };
     }
     const parsed = JSON.parse(raw) as Partial<SidebarPreferences>;
     return {
       collapsed: parsed.collapsed === true,
-      connectionsExpanded: parsed.connectionsExpanded !== false,
-      databaseObjectsExpanded: parsed.databaseObjectsExpanded !== false,
+      connectionsExpanded: false,
+      databaseObjectsExpanded: false,
     };
   } catch {
     return {
       collapsed: false,
-      connectionsExpanded: true,
-      databaseObjectsExpanded: true,
+      connectionsExpanded: false,
+      databaseObjectsExpanded: false,
     };
   }
 }

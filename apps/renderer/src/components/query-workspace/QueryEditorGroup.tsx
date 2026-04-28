@@ -1,14 +1,18 @@
-import { forwardRef, memo, useImperativeHandle, useRef, useState, type CSSProperties } from "react";
+import { forwardRef, memo, useImperativeHandle, useRef, useState, type CSSProperties, type RefObject } from "react";
 import type { DatabaseObjectType } from "@gavadb/types";
 import { EditorTabBar, type EditorTabBarItem } from "../EditorTabBar";
+import { ObjectSqlViewer } from "../ObjectSqlViewer";
+import { ObjectViewer } from "../ObjectViewer";
 import { QueryEditorPane, type QueryEditorPaneHandle } from "./QueryEditorPane";
 import type {
   EditorGroup,
+  QueryTabState,
   QueryDropPosition,
   QueryTabDragData,
-  QueryTabState,
   QueryWorkspaceTabSummary,
+  WorkspaceTabState,
 } from "./queryWorkspaceTypes";
+import { isQueryTab } from "./queryWorkspaceTypes";
 
 interface QueryEditorGroupProps {
   group: EditorGroup;
@@ -29,6 +33,7 @@ interface QueryEditorGroupProps {
   onDragStart: (payload: QueryTabDragData) => void;
   onDragEnd: () => void;
   onOpenObject: (type: DatabaseObjectType, name: string) => void;
+  onOpenObjectSql: (type: DatabaseObjectType, name: string) => void;
 }
 
 export interface QueryEditorGroupHandle {
@@ -57,24 +62,32 @@ export const QueryEditorGroup = memo(forwardRef<QueryEditorGroupHandle, QueryEdi
     onDragStart,
     onDragEnd,
     onOpenObject,
+    onOpenObjectSql,
   },
   ref,
 ) {
   const paneRef = useRef<QueryEditorPaneHandle | null>(null);
   const [hoveredDropPosition, setHoveredDropPosition] = useState<QueryDropPosition | null>(null);
   const activeTab = group.tabs.find((tab) => tab.id === group.activeTabId) ?? group.tabs[0] ?? null;
+  const activeQueryTab = activeTab && isQueryTab(activeTab) ? activeTab : null;
 
   useImperativeHandle(ref, () => ({
     focus: () => {
-      paneRef.current?.focus();
+      if (activeQueryTab) {
+        paneRef.current?.focus();
+      }
     },
     executeActive: () => {
-      paneRef.current?.executeActive();
+      if (activeQueryTab) {
+        paneRef.current?.executeActive();
+      }
     },
     executeAll: () => {
-      paneRef.current?.executeAll();
+      if (activeQueryTab) {
+        paneRef.current?.executeAll();
+      }
     },
-  }), []);
+  }), [activeQueryTab]);
 
   const showDropOverlay = dragState !== null;
   const dropZones: QueryDropPosition[] = allowSplitCreation
@@ -85,10 +98,10 @@ export const QueryEditorGroup = memo(forwardRef<QueryEditorGroupHandle, QueryEdi
     return {
       id: summary.id,
       label: summary.label,
-      title: tab?.filePath ?? summary.label,
+      title: tab && isQueryTab(tab) ? tab.filePath ?? summary.label : summary.label,
       closable: summary.closable,
-      busy: Boolean(tab?.executing || tab?.loadingMore || tab?.mutating || tab?.sorting),
-      pending: Boolean(tab?.hasPendingTransaction),
+      busy: Boolean(tab && isQueryTab(tab) && (tab.executing || tab.loadingMore || tab.mutating || tab.sorting)),
+      pending: Boolean(tab && isQueryTab(tab) && tab.hasPendingTransaction),
       draggable: true,
       onDragStart: (event) => {
         event.dataTransfer.effectAllowed = "move";
@@ -130,23 +143,32 @@ export const QueryEditorGroup = memo(forwardRef<QueryEditorGroupHandle, QueryEdi
         tabMinWidth={0}
       />
 
-      <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-        {activeTab ? (
-          <QueryEditorPane
-            ref={paneRef}
-            activeTab={activeTab}
-            isConnected={isConnected}
-            activeConnectionId={activeConnectionId}
-            resultSplitRatio={group.resultSplitRatio}
-            onResultSplitRatioChange={onResultSplitRatioChange}
-            onUpdateTab={(tabId, patch) => onUpdateTab(tabId, patch)}
-            onOpenObject={onOpenObject}
-            onCloseActiveTab={() => {
-              if (group.tabs.length > 1) {
-                onTabClose(activeTab.id);
-              }
-            }}
-          />
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          flex: 1,
+          minWidth: 0,
+          minHeight: 0,
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        {group.tabs.length > 0 ? (
+          group.tabs.map((tab) => renderTabContent({
+            tab,
+            activeTabId: activeTab?.id ?? null,
+            paneRef,
+            isConnected,
+            activeConnectionId,
+            resultSplitRatio: group.resultSplitRatio,
+            onResultSplitRatioChange,
+            onUpdateTab,
+            onOpenObject,
+            onOpenObjectSql,
+            onTabClose,
+            groupTabCount: group.tabs.length,
+          }))
         ) : (
           <div style={{ flex: 1, minHeight: 0, background: "var(--panel-bg)" }} />
         )}
@@ -185,6 +207,87 @@ export const QueryEditorGroup = memo(forwardRef<QueryEditorGroupHandle, QueryEdi
     </div>
   );
 }));
+
+function renderTabContent({
+  tab,
+  activeTabId,
+  paneRef,
+  isConnected,
+  activeConnectionId,
+  resultSplitRatio,
+  onResultSplitRatioChange,
+  onUpdateTab,
+  onOpenObject,
+  onOpenObjectSql,
+  onTabClose,
+  groupTabCount,
+}: {
+  tab: WorkspaceTabState;
+  activeTabId: string | null;
+  paneRef: RefObject<QueryEditorPaneHandle | null>;
+  isConnected: boolean;
+  activeConnectionId: string | null;
+  resultSplitRatio: number;
+  onResultSplitRatioChange: (ratio: number) => void;
+  onUpdateTab: (tabId: string, patch: Partial<QueryTabState>) => void;
+  onOpenObject: (type: DatabaseObjectType, name: string) => void;
+  onOpenObjectSql: (type: DatabaseObjectType, name: string) => void;
+  onTabClose: (tabId: string) => void;
+  groupTabCount: number;
+}) {
+  const isActive = tab.id === activeTabId;
+
+  if (tab.kind === "query") {
+    if (!isActive) return null;
+
+    return (
+      <QueryEditorPane
+        key={tab.id}
+        ref={paneRef}
+        activeTab={tab}
+        isConnected={isConnected}
+        activeConnectionId={activeConnectionId}
+        resultSplitRatio={resultSplitRatio}
+        onResultSplitRatioChange={onResultSplitRatioChange}
+        onUpdateTab={(tabId, patch) => onUpdateTab(tabId, patch)}
+        onOpenObject={onOpenObject}
+        onCloseActiveTab={() => {
+          if (groupTabCount > 1) {
+            onTabClose(tab.id);
+          }
+        }}
+      />
+    );
+  }
+
+  return (
+    <div
+      key={tab.id}
+      style={{
+        display: isActive ? "flex" : "none",
+        flex: 1,
+        flexDirection: "column",
+        width: "100%",
+        height: "100%",
+        minWidth: 0,
+        minHeight: 0,
+        background: "var(--panel-bg)",
+        overflow: "hidden",
+      }}
+    >
+      {tab.kind === "object" ? (
+        <ObjectViewer
+          objectType={tab.objectType}
+          objectName={tab.objectName}
+          activeConnectionId={tab.connectionId ?? activeConnectionId}
+          onViewSql={onOpenObjectSql}
+        />
+      ) : (
+        <ObjectSqlViewer objectType={tab.objectType} objectName={tab.objectName} />
+      )}
+    </div>
+  );
+}
 
 const dropOverlayStyle: CSSProperties = {
   position: "absolute",

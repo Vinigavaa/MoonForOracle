@@ -6,14 +6,18 @@ import { QueryEditorGroup, type QueryEditorGroupHandle } from "./QueryEditorGrou
 import { SplitResizeHandle } from "./SplitResizeHandle";
 import {
   createDefaultQueryWorkspaceState,
+  createObjectSqlTab,
+  createObjectTab,
   createQueryTab,
+  getWorkspaceTabLabel,
+  isQueryTab,
   type EditorGroup,
   type QueryDropPosition,
   type QueryTabDragData,
   type QueryTabState,
   type QueryWorkspaceTabSummary,
   type QueryWorkspaceState,
-  getQueryTabLabel,
+  type WorkspaceTabState,
 } from "./queryWorkspaceTypes";
 
 const MIN_GROUP_WIDTH = 320;
@@ -24,24 +28,14 @@ interface QueryWorkspaceProps {
   hasPendingTransaction: boolean;
   executeTriggerRef: React.MutableRefObject<(() => void) | null>;
   executeAllTriggerRef: React.MutableRefObject<(() => void) | null>;
-  onOpenObject: (type: DatabaseObjectType, name: string) => void;
-  onWorkspaceStateChange?: (state: QueryWorkspaceViewState) => void;
 }
 
 export interface QueryWorkspaceHandle {
   focus: () => void;
   openFile: (file: WorkspaceReadFileResponse) => void;
-  selectTab: (tabId: string) => void;
-  closeTab: (tabId: string) => void;
+  openObject: (type: DatabaseObjectType, name: string) => void;
+  openObjectSql: (type: DatabaseObjectType, name: string) => void;
   addTab: () => void;
-  startTabDrag: (tabId: string) => void;
-  endTabDrag: () => void;
-}
-
-export interface QueryWorkspaceViewState {
-  tabs: QueryWorkspaceTabSummary[];
-  activeTabId: string | null;
-  isSplit: boolean;
 }
 
 export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspaceProps>(function QueryWorkspace(
@@ -51,8 +45,6 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
     hasPendingTransaction,
     executeTriggerRef,
     executeAllTriggerRef,
-    onOpenObject,
-    onWorkspaceStateChange,
   },
   ref,
 ) {
@@ -68,9 +60,6 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
   }, [workspace]);
 
   const resolvedActiveGroupId = workspace.activeGroupId ?? workspace.groups[0]?.id ?? null;
-  const resolvedActiveTabId = workspace.groups.find((group) => group.id === resolvedActiveGroupId)?.activeTabId
-    ?? workspace.groups[0]?.activeTabId
-    ?? null;
 
   useEffect(() => {
     if (hasPendingTransaction) return;
@@ -80,7 +69,7 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
       const groups = prev.groups.map((group) => {
         let groupChanged = false;
         const tabs = group.tabs.map((tab) => {
-          if (!tab.hasPendingTransaction) return tab;
+          if (!isQueryTab(tab) || !tab.hasPendingTransaction) return tab;
           changed = true;
           groupChanged = true;
           return { ...tab, hasPendingTransaction: false };
@@ -105,14 +94,14 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
     ));
   }, []);
 
-  const updateTab = useCallback((groupId: string, tabId: string, patch: Partial<QueryTabState>) => {
+  const updateQueryTab = useCallback((groupId: string, tabId: string, patch: Partial<QueryTabState>) => {
     setWorkspace((prev) => ({
       ...prev,
       groups: prev.groups.map((group) => (
         group.id === groupId
           ? {
             ...group,
-            tabs: group.tabs.map((tab) => (tab.id === tabId ? { ...tab, ...patch } : tab)),
+            tabs: group.tabs.map((tab) => (tab.id === tabId && isQueryTab(tab) ? { ...tab, ...patch } : tab)),
           }
           : group
       )),
@@ -150,47 +139,6 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
     handleAddTab(targetGroupId);
   }, [handleAddTab, resolvedActiveGroupId, workspace.groups]);
 
-  const handleSelectWorkspaceTab = useCallback((tabId: string) => {
-    let focusTargetGroupId: string | null = null;
-
-    setWorkspace((prev) => {
-      const nextGroups = prev.groups.map((group) => {
-        if (!group.tabs.some((tab) => tab.id === tabId)) {
-          return group;
-        }
-
-        focusTargetGroupId = group.id;
-        return { ...group, activeTabId: tabId };
-      });
-
-      if (!focusTargetGroupId) {
-        return prev;
-      }
-
-      return {
-        ...prev,
-        activeGroupId: focusTargetGroupId,
-        groups: nextGroups,
-      };
-    });
-
-    focusGroup(focusTargetGroupId);
-  }, [focusGroup]);
-
-  const handleStartWorkspaceTabDrag = useCallback((tabId: string) => {
-    const sourceGroup = workspace.groups.find((group) => group.tabs.some((tab) => tab.id === tabId));
-    if (!sourceGroup) return;
-
-    setDragState({
-      tabId,
-      sourceGroupId: sourceGroup.id,
-    });
-  }, [workspace.groups]);
-
-  const handleEndWorkspaceTabDrag = useCallback(() => {
-    setDragState(null);
-  }, []);
-
   const handleSelectTab = useCallback((groupId: string, tabId: string) => {
     setWorkspace((prev) => ({
       ...prev,
@@ -207,7 +155,6 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
     setWorkspace((prev) => {
       const group = prev.groups.find((item) => item.id === groupId);
       if (!group) return prev;
-      if (group.tabs.length <= 1 && prev.groups.length === 1) return prev;
 
       const nextGroups: EditorGroup[] = [];
 
@@ -249,7 +196,7 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
 
     setWorkspace((prev) => {
       for (const group of prev.groups) {
-        const existing = group.tabs.find((tab) => tab.filePath === file.path);
+        const existing = group.tabs.find((tab) => isQueryTab(tab) && tab.filePath === file.path);
         if (existing) {
           focusTargetGroupId = group.id;
           return {
@@ -284,6 +231,63 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
 
     focusGroup(focusTargetGroupId);
   }, [activeConnectionId, focusGroup]);
+
+  const openObjectTab = useCallback((
+    groupId: string | null,
+    kind: "object" | "object-sql",
+    objectType: DatabaseObjectType,
+    objectName: string,
+  ) => {
+    let focusTargetGroupId: string | null = null;
+
+    setWorkspace((prev) => {
+      for (const group of prev.groups) {
+        const existing = group.tabs.find((tab) => (
+          tab.kind === kind
+          && tab.objectType === objectType
+          && tab.objectName === objectName
+        ));
+        if (existing) {
+          focusTargetGroupId = group.id;
+          return {
+            ...prev,
+            activeGroupId: group.id,
+            groups: prev.groups.map((current) => (
+              current.id === group.id ? { ...current, activeTabId: existing.id } : current
+            )),
+          };
+        }
+      }
+
+      const targetGroupId = groupId ?? prev.activeGroupId ?? prev.groups[0]?.id;
+      if (!targetGroupId) return prev;
+
+      const tab = kind === "object"
+        ? createObjectTab(objectType, objectName, activeConnectionId)
+        : createObjectSqlTab(objectType, objectName, activeConnectionId);
+      focusTargetGroupId = targetGroupId;
+
+      return {
+        ...prev,
+        activeGroupId: targetGroupId,
+        groups: prev.groups.map((group) => (
+          group.id === targetGroupId
+            ? { ...group, activeTabId: tab.id, tabs: [...group.tabs, tab] }
+            : group
+        )),
+      };
+    });
+
+    focusGroup(focusTargetGroupId);
+  }, [activeConnectionId, focusGroup]);
+
+  const handleOpenObject = useCallback((type: DatabaseObjectType, name: string) => {
+    openObjectTab(null, "object", type, name);
+  }, [openObjectTab]);
+
+  const handleOpenObjectSql = useCallback((type: DatabaseObjectType, name: string) => {
+    openObjectTab(null, "object-sql", type, name);
+  }, [openObjectTab]);
 
   const handleTabDrop = useCallback((payload: QueryTabDragData, targetGroupId: string, position: QueryDropPosition) => {
     let nextFocusGroupId: string | null = null;
@@ -358,12 +362,10 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
         resultSplitRatio: sourceGroup.resultSplitRatio,
       };
 
-      const nextGroups = [nextSourceGroup, newGroup];
-
       const normalized = normalizeWorkspaceState({
         ...prev,
         mode: "side-by-side",
-        groups: nextGroups,
+        groups: [nextSourceGroup, newGroup],
         activeGroupId: newGroup.id,
         groupSplitRatio: 0.5,
       }, activeConnectionId);
@@ -395,18 +397,6 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [handleAddTabToActiveGroup]);
 
-  const workspaceTabSummaries = createWorkspaceTabSummaries(workspace.groups);
-
-  useEffect(() => {
-    if (!onWorkspaceStateChange) return;
-
-    onWorkspaceStateChange({
-      tabs: workspaceTabSummaries,
-      activeTabId: resolvedActiveTabId,
-      isSplit: workspace.mode === "side-by-side" && workspace.groups.length > 1,
-    });
-  }, [onWorkspaceStateChange, resolvedActiveTabId, workspace.groups.length, workspace.mode, workspaceTabSummaries]);
-
   executeTriggerRef.current = () => {
     const activeGroupId = resolvedActiveGroupId;
     if (!activeGroupId) return;
@@ -424,19 +414,15 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
       focusGroup(resolvedActiveGroupId);
     },
     openFile,
-    selectTab: handleSelectWorkspaceTab,
-    closeTab: (tabId: string) => {
-      const group = workspace.groups.find((item) => item.tabs.some((tab) => tab.id === tabId));
-      if (!group) return;
-      handleCloseTab(group.id, tabId);
-    },
+    openObject: handleOpenObject,
+    openObjectSql: handleOpenObjectSql,
     addTab: handleAddTabToActiveGroup,
-    startTabDrag: handleStartWorkspaceTabDrag,
-    endTabDrag: handleEndWorkspaceTabDrag,
-  }), [focusGroup, handleAddTabToActiveGroup, handleCloseTab, handleEndWorkspaceTabDrag, handleSelectWorkspaceTab, handleStartWorkspaceTabDrag, openFile, resolvedActiveGroupId, workspace.groups]);
+  }), [focusGroup, handleAddTabToActiveGroup, handleOpenObject, handleOpenObjectSql, openFile, resolvedActiveGroupId]);
 
   const groups = workspace.groups;
   const isSplit = workspace.mode === "side-by-side" && groups.length > 1;
+  const workspaceTabSummaries = createWorkspaceTabSummaries(groups);
+
   const renderGroup = (group: EditorGroup, index: number) => {
     const isActiveGroup = resolvedActiveGroupId === group.id;
     const isFirst = index === 0;
@@ -472,12 +458,13 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
           onTabSelect={(tabId) => handleSelectTab(group.id, tabId)}
           onTabClose={(tabId) => handleCloseTab(group.id, tabId)}
           onAddTab={() => handleAddTab(group.id)}
-          onUpdateTab={(tabId, patch) => updateTab(group.id, tabId, patch)}
+          onUpdateTab={(tabId, patch) => updateQueryTab(group.id, tabId, patch)}
           onResultSplitRatioChange={(ratio) => updateGroup(group.id, { resultSplitRatio: ratio })}
           onTabDrop={(payload, position) => handleTabDrop(payload, group.id, position)}
           onDragStart={setDragState}
           onDragEnd={() => setDragState(null)}
-          onOpenObject={onOpenObject}
+          onOpenObject={(type, name) => openObjectTab(group.id, "object", type, name)}
+          onOpenObjectSql={(type, name) => openObjectTab(group.id, "object-sql", type, name)}
         />
       </div>
     );
@@ -495,7 +482,7 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
           background: "var(--panel-bg)",
         }}
       >
-        {!isSplit && renderGroup(groups[0], 0)}
+        {!isSplit && groups[0] && renderGroup(groups[0], 0)}
 
         {isSplit && groups[0] && groups[1] && (
           <>
@@ -531,9 +518,7 @@ function normalizeWorkspaceState(workspace: QueryWorkspaceState, connectionId: s
   return {
     ...workspace,
     groups,
-    mode: groups.length === 1
-      ? "single"
-      : "side-by-side",
+    mode: groups.length === 1 ? "single" : "side-by-side",
     activeGroupId: groups.some((group) => group.id === workspace.activeGroupId)
       ? workspace.activeGroupId
       : groups[0].id,
@@ -545,19 +530,22 @@ function createWorkspaceTabSummaries(groups: EditorGroup[]): QueryWorkspaceTabSu
   let queryCounter = 0;
 
   return groups.flatMap((group) => group.tabs.map((tab) => {
-    queryCounter += 1;
+    if (tab.kind === "query") {
+      queryCounter += 1;
+    }
+
     return {
       id: tab.id,
-      label: getQueryTabLabel(tab.filePath, queryCounter),
+      label: getWorkspaceTabLabel(tab, queryCounter),
       groupId: group.id,
-      closable: group.tabs.length > 1 || groups.length > 1,
+      closable: true,
     };
   }));
 }
 
 function getNextActiveTabId(
-  previousTabs: QueryTabState[],
-  nextTabs: QueryTabState[],
+  previousTabs: WorkspaceTabState[],
+  nextTabs: WorkspaceTabState[],
   activeTabId: string | null,
   removedTabId: string,
 ): string | null {

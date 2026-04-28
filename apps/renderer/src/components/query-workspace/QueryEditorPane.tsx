@@ -489,6 +489,17 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
     }
   }, [isConnected, onOpenObject, resolveObject, toast]);
 
+  const handleCanOpenObject = useCallback(async (name: string) => {
+    if (!isConnected) return false;
+
+    try {
+      const resolved = await resolveObject(name);
+      return Boolean(resolved);
+    } catch {
+      return false;
+    }
+  }, [isConnected, resolveObject]);
+
   const handleSearchObjectsByPrefix = useCallback(async (prefix: string, limit?: number): Promise<DatabaseObjectSuggestion[]> => {
     if (!isConnected) return [];
     const result = await window.gavadb.dbSearchObjects(prefix, limit);
@@ -551,6 +562,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
           onSaveAs={() => void saveActiveFile(true)}
           onExecutionContextChange={(snapshot) => applyPatch({ currentExecutionSnapshot: snapshot })}
           onOpenObject={handleOpenObject}
+          onCanOpenObject={handleCanOpenObject}
           onSearchObjectsByPrefix={handleSearchObjectsByPrefix}
           onSearchColumns={handleSearchColumns}
           onCloseTab={onCloseActiveTab}
