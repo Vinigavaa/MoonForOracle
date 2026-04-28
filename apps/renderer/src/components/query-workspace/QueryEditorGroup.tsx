@@ -1,16 +1,19 @@
 import { forwardRef, memo, useImperativeHandle, useRef, useState, type CSSProperties } from "react";
 import type { DatabaseObjectType } from "@gavadb/types";
+import { EditorTabBar, type EditorTabBarItem } from "../EditorTabBar";
 import { QueryEditorPane, type QueryEditorPaneHandle } from "./QueryEditorPane";
 import type {
   EditorGroup,
   QueryDropPosition,
   QueryTabDragData,
   QueryTabState,
+  QueryWorkspaceTabSummary,
 } from "./queryWorkspaceTypes";
 
 interface QueryEditorGroupProps {
   group: EditorGroup;
   groupCount: number;
+  tabSummaries: QueryWorkspaceTabSummary[];
   isActive: boolean;
   isConnected: boolean;
   activeConnectionId: string | null;
@@ -38,6 +41,7 @@ export const QueryEditorGroup = memo(forwardRef<QueryEditorGroupHandle, QueryEdi
   {
     group,
     groupCount,
+    tabSummaries,
     isActive,
     isConnected,
     activeConnectionId,
@@ -76,6 +80,30 @@ export const QueryEditorGroup = memo(forwardRef<QueryEditorGroupHandle, QueryEdi
   const dropZones: QueryDropPosition[] = allowSplitCreation
     ? ["center", "right"]
     : ["center"];
+  const tabItems: EditorTabBarItem[] = tabSummaries.map((summary) => {
+    const tab = group.tabs.find((item) => item.id === summary.id);
+    return {
+      id: summary.id,
+      label: summary.label,
+      title: tab?.filePath ?? summary.label,
+      closable: summary.closable,
+      busy: Boolean(tab?.executing || tab?.loadingMore || tab?.mutating || tab?.sorting),
+      pending: Boolean(tab?.hasPendingTransaction),
+      draggable: true,
+      onDragStart: (event) => {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", summary.id);
+        onDragStart({
+          tabId: summary.id,
+          sourceGroupId: group.id,
+        });
+      },
+      onDragEnd: () => {
+        onDragEnd();
+      },
+    };
+  });
+
   return (
     <div
       onMouseDown={onActivateGroup}
@@ -88,10 +116,20 @@ export const QueryEditorGroup = memo(forwardRef<QueryEditorGroupHandle, QueryEdi
         position: "relative",
         background: "var(--panel-bg)",
         boxShadow: isActive
-          ? "inset 1px 0 0 rgba(137, 180, 250, 0.28), inset -1px 0 0 rgba(137, 180, 250, 0.28), inset 0 -1px 0 rgba(137, 180, 250, 0.28)"
-          : "inset 1px 0 0 rgba(255, 255, 255, 0.02), inset -1px 0 0 rgba(255, 255, 255, 0.02), inset 0 -1px 0 rgba(255, 255, 255, 0.02)",
+          ? "inset 0 0 0 1px rgba(137, 180, 250, 0.28)"
+          : "inset 0 0 0 1px rgba(255, 255, 255, 0.02)",
       }}
     >
+      <EditorTabBar
+        tabs={tabItems}
+        activeTabId={group.activeTabId}
+        onTabSelect={onTabSelect}
+        onTabClose={onTabClose}
+        onAddTab={onAddTab}
+        addButtonTitle="Nova Query"
+        tabMinWidth={0}
+      />
+
       <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         {activeTab ? (
           <QueryEditorPane

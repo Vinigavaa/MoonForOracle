@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type {
   ConnectionConfig,
   DatabaseObjectType,
@@ -19,7 +19,6 @@ import { useConnection } from "./hooks/useConnection";
 import { useSavedConnections } from "./hooks/useSavedConnections";
 import { useToastContext } from "./hooks/ToastContext";
 import { loadSidebarPreferences, saveSidebarPreferences } from "./lib/sidebarPreferences";
-import type { QueryWorkspaceViewState } from "./components/query-workspace/QueryWorkspace";
 
 interface ObjectTab {
   id: string;
@@ -32,6 +31,8 @@ interface ObjectSqlTab {
   type: DatabaseObjectType;
   name: string;
 }
+
+const WORKSPACE_VIEW_TAB_ID = "__query-workspace__";
 
 export function App() {
   const {
@@ -66,14 +67,8 @@ export function App() {
   const [activeTab, setActiveTab] = useState<string | null>(null);
   const [objectTabs, setObjectTabs] = useState<ObjectTab[]>([]);
   const [objectSqlTabs, setObjectSqlTabs] = useState<ObjectSqlTab[]>([]);
-  const [queryWorkspaceView, setQueryWorkspaceView] = useState<QueryWorkspaceViewState>({
-    tabs: [],
-    activeTabId: null,
-    isSplit: false,
-  });
   const [tabOrder, setTabOrder] = useState<string[]>([]);
   const dismissedUpdateVersionRef = useRef<string | null>(null);
-  const pendingQueryActivationRef = useRef(false);
   const executeTriggerRef = useRef<(() => void) | null>(null);
   const executeAllTriggerRef = useRef<(() => void) | null>(null);
   const sqlEditorRef = useRef<SqlEditorHandle | null>(null);
@@ -316,20 +311,18 @@ export function App() {
       toast.warning("Connect to a database first");
       return;
     }
-    pendingQueryActivationRef.current = true;
-    setActiveTab(queryWorkspaceView.activeTabId);
+    setActiveTab(null);
     executeTriggerRef.current?.();
-  }, [isConnected, queryWorkspaceView.activeTabId, toast]);
+  }, [isConnected, toast]);
 
   const handleExecuteAllSql = useCallback(() => {
     if (!isConnected) {
       toast.warning("Connect to a database first");
       return;
     }
-    pendingQueryActivationRef.current = true;
-    setActiveTab(queryWorkspaceView.activeTabId);
+    setActiveTab(null);
     executeAllTriggerRef.current?.();
-  }, [isConnected, queryWorkspaceView.activeTabId, toast]);
+  }, [isConnected, toast]);
 
   const handleObjectSelect = useCallback((type: DatabaseObjectType, name: string) => {
     const id = `obj:${type}:${name}`;
@@ -345,47 +338,21 @@ export function App() {
     setActiveTab(id);
   }, []);
 
-  const handleWorkspaceStateChange = useCallback((state: QueryWorkspaceViewState) => {
-    setQueryWorkspaceView(state);
-    setActiveTab((prev) => {
-      const shouldActivateQuery = pendingQueryActivationRef.current || prev === null || !objectTabIds.has(prev);
-      pendingQueryActivationRef.current = false;
-      return shouldActivateQuery ? state.activeTabId : prev;
-    });
-  }, [objectTabIds]);
-
   const handleOpenWorkspaceFile = useCallback((file: WorkspaceReadFileResponse) => {
-    pendingQueryActivationRef.current = true;
+    setActiveTab(null);
     sqlEditorRef.current?.openFile(file);
   }, []);
 
   const handleTabChange = useCallback((id: string) => {
-    if (queryWorkspaceView.tabs.some((tab) => tab.id === id)) {
-      pendingQueryActivationRef.current = true;
-      setActiveTab(id);
-      sqlEditorRef.current?.selectTab(id);
-      return;
-    }
-
-    setActiveTab(id);
-  }, [queryWorkspaceView.tabs]);
-
-  const handleAddQueryTab = useCallback(() => {
-    pendingQueryActivationRef.current = true;
-    sqlEditorRef.current?.addTab();
+    setActiveTab(id === WORKSPACE_VIEW_TAB_ID ? null : id);
   }, []);
 
   const handleTabClose = useCallback((id: string) => {
-    if (queryWorkspaceView.tabs.some((tab) => tab.id === id)) {
-      sqlEditorRef.current?.closeTab(id);
-      return;
-    }
-
     setObjectTabs((prev) => prev.filter((tab) => tab.id !== id));
     setObjectSqlTabs((prev) => prev.filter((tab) => tab.id !== id));
     setTabOrder((prev) => prev.filter((tabId) => tabId !== id));
-    setActiveTab((prev) => (prev === id ? queryWorkspaceView.activeTabId : prev));
-  }, [queryWorkspaceView.activeTabId, queryWorkspaceView.tabs]);
+    setActiveTab((prev) => (prev === id ? null : prev));
+  }, []);
 
   const prevConnected2 = useRef(false);
   useEffect(() => {
@@ -393,15 +360,13 @@ export function App() {
       setObjectTabs([]);
       setObjectSqlTabs([]);
       setTabOrder([]);
-      pendingQueryActivationRef.current = true;
-      setActiveTab(queryWorkspaceView.activeTabId);
+      setActiveTab(null);
     }
     prevConnected2.current = isConnected;
-  }, [isConnected, queryWorkspaceView.activeTabId]);
+  }, [isConnected]);
 
   useEffect(() => {
     const knownIds = new Set([
-      ...queryWorkspaceView.tabs.map((tab) => tab.id),
       ...objectTabs.map((tab) => tab.id),
       ...objectSqlTabs.map((tab) => tab.id),
     ]);
@@ -409,11 +374,6 @@ export function App() {
     setTabOrder((prev) => {
       const next = prev.filter((id) => knownIds.has(id));
 
-      for (const tab of queryWorkspaceView.tabs) {
-        if (!next.includes(tab.id)) {
-          next.push(tab.id);
-        }
-      }
       for (const tab of objectTabs) {
         if (!next.includes(tab.id)) {
           next.push(tab.id);
@@ -427,27 +387,11 @@ export function App() {
 
       return next.length === prev.length && next.every((id, index) => id === prev[index]) ? prev : next;
     });
-  }, [objectSqlTabs, objectTabs, queryWorkspaceView.tabs]);
+  }, [objectSqlTabs, objectTabs]);
 
-  const tabs = useMemo<EditorTabBarItem[]>(() => {
+  const objectViewTabs = useMemo<EditorTabBarItem[]>(() => {
     const byId = new Map<string, EditorTabBarItem>();
 
-    for (const tab of queryWorkspaceView.tabs) {
-      byId.set(tab.id, {
-        id: tab.id,
-        label: tab.label,
-        closable: tab.closable,
-        draggable: true,
-        onDragStart: (event: DragEvent<HTMLButtonElement>) => {
-          event.dataTransfer.effectAllowed = "move";
-          event.dataTransfer.setData("text/plain", tab.id);
-          sqlEditorRef.current?.startTabDrag(tab.id);
-        },
-        onDragEnd: () => {
-          sqlEditorRef.current?.endTabDrag();
-        },
-      });
-    }
     for (const tab of objectTabs) {
       byId.set(tab.id, {
         id: tab.id,
@@ -463,13 +407,16 @@ export function App() {
       });
     }
 
-    return tabOrder
+    return [
+      { id: WORKSPACE_VIEW_TAB_ID, label: "Queries" },
+      ...tabOrder
       .map((id) => byId.get(id) ?? null)
-      .filter((tab): tab is EditorTabBarItem => tab !== null);
-  }, [objectSqlTabs, objectTabs, queryWorkspaceView.tabs, tabOrder]);
+      .filter((tab): tab is EditorTabBarItem => tab !== null),
+    ];
+  }, [objectSqlTabs, objectTabs, tabOrder]);
 
-  const activeUnifiedTabId = activeTab ?? queryWorkspaceView.activeTabId;
-  const showQueryWorkspace = !activeUnifiedTabId || queryWorkspaceView.tabs.some((tab) => tab.id === activeUnifiedTabId);
+  const showQueryWorkspace = activeTab === null || !objectTabIds.has(activeTab);
+  const activeSurfaceTabId = showQueryWorkspace ? WORKSPACE_VIEW_TAB_ID : activeTab;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
@@ -505,14 +452,14 @@ export function App() {
         />
 
         <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-          <EditorTabBar
-            tabs={tabs}
-            activeTabId={activeUnifiedTabId}
-            onTabSelect={handleTabChange}
-            onTabClose={handleTabClose}
-            onAddTab={handleAddQueryTab}
-            addButtonTitle="Nova Query"
-          />
+          {!showQueryWorkspace && (
+            <EditorTabBar
+              tabs={objectViewTabs}
+              activeTabId={activeSurfaceTabId}
+              onTabSelect={handleTabChange}
+              onTabClose={handleTabClose}
+            />
+          )}
 
           <div style={{ flex: 1, overflow: "hidden" }}>
             <div style={{ display: showQueryWorkspace ? "contents" : "none" }}>
@@ -524,12 +471,11 @@ export function App() {
                 executeTriggerRef={executeTriggerRef}
                 executeAllTriggerRef={executeAllTriggerRef}
                 onOpenObject={handleObjectSelect}
-                onWorkspaceStateChange={handleWorkspaceStateChange}
               />
             </div>
 
             {objectTabs.map((tab) => (
-              <div key={tab.id} style={{ display: activeUnifiedTabId === tab.id ? "contents" : "none" }}>
+              <div key={tab.id} style={{ display: activeSurfaceTabId === tab.id ? "contents" : "none" }}>
                 <ObjectViewer
                   objectType={tab.type}
                   objectName={tab.name}
@@ -540,7 +486,7 @@ export function App() {
             ))}
 
             {objectSqlTabs.map((tab) => (
-              <div key={tab.id} style={{ display: activeUnifiedTabId === tab.id ? "contents" : "none" }}>
+              <div key={tab.id} style={{ display: activeSurfaceTabId === tab.id ? "contents" : "none" }}>
                 <ObjectSqlViewer objectType={tab.type} objectName={tab.name} />
               </div>
             ))}

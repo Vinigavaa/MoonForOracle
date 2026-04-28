@@ -20,6 +20,7 @@ interface EditorTabBarProps {
   onTabClose?: (id: string) => void;
   onAddTab?: () => void;
   addButtonTitle?: string;
+  tabMinWidth?: number;
 }
 
 export function EditorTabBar({
@@ -29,6 +30,7 @@ export function EditorTabBar({
   onTabClose,
   onAddTab,
   addButtonTitle = "Nova Query",
+  tabMinWidth,
 }: EditorTabBarProps) {
   return (
     <div style={tabBarStyle}>
@@ -46,6 +48,7 @@ export function EditorTabBar({
               onDragEnd={tab.onDragEnd}
               style={{
                 ...tabButtonStyle,
+                minWidth: tabMinWidth ?? tabButtonStyle.minWidth,
                 background: isActive ? "var(--tab-active-bg)" : "transparent",
                 borderBottomColor: isActive ? "var(--accent)" : "transparent",
                 color: isActive
@@ -77,19 +80,19 @@ export function EditorTabBar({
             </button>
           );
         })}
-      </div>
 
-      {onAddTab && (
-        <button
-          type="button"
-          onClick={onAddTab}
-          title={addButtonTitle}
-          aria-label={addButtonTitle}
-          style={addButtonStyle}
-        >
-          +
-        </button>
-      )}
+        {onAddTab && (
+          <button
+            type="button"
+            onClick={onAddTab}
+            title={addButtonTitle}
+            aria-label={addButtonTitle}
+            style={addButtonStyle}
+          >
+            +
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -162,15 +165,19 @@ const closeButtonStyle: CSSProperties = {
 };
 
 const addButtonStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flex: "0 0 auto",
   border: "none",
-  borderLeft: "1px solid var(--border-color)",
   borderRadius: 0,
-  minWidth: 38,
-  padding: "0 12px",
-  background: "rgba(255, 255, 255, 0.03)",
-  color: "var(--accent)",
-  fontSize: 18,
-  fontWeight: 600,
+  minWidth: 28,
+  padding: "0 8px",
+  background: "transparent",
+  color: "var(--text-secondary)",
+  fontSize: 16,
+  fontWeight: 500,
   lineHeight: 1,
   flexShrink: 0,
+  whiteSpace: "nowrap",
 };

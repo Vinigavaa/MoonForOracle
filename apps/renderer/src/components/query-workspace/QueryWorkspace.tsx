@@ -395,15 +395,17 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [handleAddTabToActiveGroup]);
 
+  const workspaceTabSummaries = createWorkspaceTabSummaries(workspace.groups);
+
   useEffect(() => {
     if (!onWorkspaceStateChange) return;
 
     onWorkspaceStateChange({
-      tabs: createWorkspaceTabSummaries(workspace.groups),
+      tabs: workspaceTabSummaries,
       activeTabId: resolvedActiveTabId,
       isSplit: workspace.mode === "side-by-side" && workspace.groups.length > 1,
     });
-  }, [onWorkspaceStateChange, resolvedActiveTabId, workspace.groups, workspace.mode]);
+  }, [onWorkspaceStateChange, resolvedActiveTabId, workspace.groups.length, workspace.mode, workspaceTabSummaries]);
 
   executeTriggerRef.current = () => {
     const activeGroupId = resolvedActiveGroupId;
@@ -439,11 +441,14 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
     const isActiveGroup = resolvedActiveGroupId === group.id;
     const isFirst = index === 0;
     const primaryFlex = isSplit && isFirst ? `0 0 ${workspace.groupSplitRatio * 100}%` : 1;
+    const groupTabSummaries = workspaceTabSummaries.filter((tab) => tab.groupId === group.id);
 
     return (
       <div
         key={group.id}
         style={{
+          display: "flex",
+          flexDirection: "column",
           flex: primaryFlex,
           minWidth: MIN_GROUP_WIDTH,
           minHeight: 0,
@@ -457,6 +462,7 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
           }}
           group={group}
           groupCount={groups.length}
+          tabSummaries={groupTabSummaries}
           isActive={isActiveGroup}
           isConnected={isConnected}
           activeConnectionId={activeConnectionId}
