@@ -24,6 +24,7 @@ export interface QueryTabState {
   filePath: string | null;
   currentExecutionSnapshot: SqlEditorExecutionSnapshot | null;
   connectionId: string | null;
+  isResultVisible: boolean;
   result: SqlExecutionResponse | null;
   batchResults: BatchStatementExecution[] | null;
   allRows: QueryResultRow[];
@@ -87,13 +88,16 @@ export interface QueryWorkspaceTabSummary {
 }
 
 export function createQueryTab(connectionId: string | null = null, partial?: Partial<QueryTabState>): QueryTabState {
+  const initialSql = partial?.sql ?? "";
+
   return {
     kind: "query",
     id: partial?.id ?? generateId(),
-    sql: partial?.sql ?? "",
+    sql: initialSql,
     filePath: partial?.filePath ?? null,
     currentExecutionSnapshot: partial?.currentExecutionSnapshot ?? null,
     connectionId: partial?.connectionId ?? connectionId,
+    isResultVisible: partial?.isResultVisible ?? initialSql.trim().length > 0,
     result: partial?.result ?? null,
     batchResults: partial?.batchResults ?? null,
     allRows: partial?.allRows ?? [],

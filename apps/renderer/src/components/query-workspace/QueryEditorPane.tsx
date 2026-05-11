@@ -3,16 +3,16 @@ import type {
   BindMetadata,
   BindParameterValue,
   DatabaseObjectType,
+  DatabaseObjectSuggestion,
   QueryExportColumn,
   SearchColumnsRequest,
   SqlColumnSuggestion,
-  DatabaseObjectSuggestion,
   UpdateRowRequest,
 } from "@gavadb/types";
 import { extractBindParameters } from "@gavadb/utils";
+import { useObjectResolver } from "../../hooks/useObjectResolver";
 import { useSqlExecution } from "../../hooks/useSqlExecution";
 import { useToastContext } from "../../hooks/ToastContext";
-import { useObjectResolver } from "../../hooks/useObjectResolver";
 import { resolveAllExecutionTargets, resolveSingleExecutionTarget } from "../../lib/sqlExecutionTarget";
 import { BindParametersModal } from "../BindParametersModal";
 import { ResultPanel } from "../ResultPanel";
@@ -23,7 +23,6 @@ import type { BindInputCacheEntry, QueryTabState } from "./queryWorkspaceTypes";
 interface QueryEditorPaneProps {
   activeTab: QueryTabState;
   isConnected: boolean;
-  activeConnectionId: string | null;
   resultSplitRatio: number;
   onResultSplitRatioChange: (ratio: number) => void;
   onUpdateTab: (tabId: string, patch: Partial<QueryTabState>) => void;
@@ -39,6 +38,7 @@ export interface QueryEditorPaneHandle {
 
 const MIN_EDITOR_HEIGHT = 80;
 const MIN_RESULT_HEIGHT = 60;
+const COLLAPSED_RESULT_HEIGHT = 36;
 const MAX_ACCUMULATED_ROWS = 5_000;
 
 export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPaneProps>(function QueryEditorPane(
@@ -97,6 +97,12 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
     onUpdateTab(activeTab.id, patch);
   }, [activeTab.id, onUpdateTab]);
 
+  const showResults = useCallback(() => {
+    if (!activeTab.isResultVisible) {
+      applyPatch({ isResultVisible: true });
+    }
+  }, [activeTab.isResultVisible, applyPatch]);
+
   const recoverUiState = useCallback((restoreFocus = false) => {
     applyPatch({
       executing: false,
@@ -111,7 +117,9 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
   }, [applyPatch, focusEditor]);
 
   const runSqlWithBinds = useCallback(async (sql: string, binds?: Record<string, BindParameterValue>) => {
+    showResults();
     applyPatch({
+      isResultVisible: true,
       executing: true,
       error: null,
       allRows: [],
@@ -153,7 +161,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
     } finally {
       recoverUiState(shouldRestoreFocus);
     }
-  }, [activeTab.hasPendingTransaction, applyPatch, execute, recoverUiState]);
+  }, [activeTab.hasPendingTransaction, applyPatch, execute, recoverUiState, showResults]);
 
   const executeActive = useCallback(async () => {
     if (!isConnected) {
@@ -170,6 +178,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
 
     const binds = extractBindParameters(target.sql);
     if (binds.length > 0) {
+      showResults();
       const inference = await inferBinds(target.sql);
       const detectedBinds: BindMetadata[] = binds.map((bind) => {
         const found = inference.data?.find((meta) => meta.name.toLowerCase() === bind.name.toLowerCase());
@@ -188,7 +197,9 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
       return;
     }
 
+    showResults();
     applyPatch({
+      isResultVisible: true,
       executing: true,
       error: null,
       allRows: [],
@@ -230,7 +241,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
     } finally {
       recoverUiState(shouldRestoreFocus);
     }
-  }, [activeTab.hasPendingTransaction, applyPatch, execute, inferBinds, isConnected, recoverUiState, toast]);
+  }, [activeTab.hasPendingTransaction, applyPatch, execute, inferBinds, isConnected, recoverUiState, showResults, toast]);
 
   const executeAll = useCallback(async () => {
     if (!isConnected) {
@@ -247,11 +258,13 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
 
     const withBinds = targets.find((target) => extractBindParameters(target.sql).length > 0);
     if (withBinds) {
-      toast.warning("Execute All does not support :bind parameters — run that statement individually (Ctrl+Enter).");
+      toast.warning("Execute All does not support :bind parameters - run that statement individually (Ctrl+Enter).");
       return;
     }
 
+    showResults();
     applyPatch({
+      isResultVisible: true,
       executing: true,
       error: null,
       result: null,
@@ -298,7 +311,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
       applyPatch({ batchResults: [...batchResults], hasPendingTransaction });
       recoverUiState(shouldRestoreFocus);
     }
-  }, [activeTab.hasPendingTransaction, applyPatch, execute, isConnected, recoverUiState, toast]);
+  }, [activeTab.hasPendingTransaction, applyPatch, execute, isConnected, recoverUiState, showResults, toast]);
 
   const refreshActive = useCallback(async () => {
     const sql = activeTab.executedSql?.trim();
@@ -356,7 +369,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
       }
 
       applyPatch({ hasPendingTransaction: true });
-      toast.success(`${result.data?.rowsAffected ?? request.length} row(s) applied to pending transaction — Commit to persist`);
+      toast.success(`${result.data?.rowsAffected ?? request.length} row(s) applied to pending transaction - Commit to persist`);
       return {};
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -551,7 +564,13 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
 
   return (
     <div ref={containerRef} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div style={{ flex: `0 0 ${resultSplitRatio * 100}%`, minHeight: MIN_EDITOR_HEIGHT, overflow: "hidden" }}>
+      <div
+        style={{
+          flex: activeTab.isResultVisible ? `0 0 ${resultSplitRatio * 100}%` : "1 1 auto",
+          minHeight: MIN_EDITOR_HEIGHT,
+          overflow: "hidden",
+        }}
+      >
         <SqlCodeEditor
           ref={editorRef}
           value={activeTab.sql}
@@ -574,13 +593,15 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
         />
       </div>
 
-      <SplitResizeHandle
-        axis="vertical"
-        containerRef={containerRef}
-        minPrimarySize={MIN_EDITOR_HEIGHT}
-        minSecondarySize={MIN_RESULT_HEIGHT}
-        onChange={onResultSplitRatioChange}
-      />
+      {activeTab.isResultVisible ? (
+        <SplitResizeHandle
+          axis="vertical"
+          containerRef={containerRef}
+          minPrimarySize={MIN_EDITOR_HEIGHT}
+          minSecondarySize={MIN_RESULT_HEIGHT}
+          onChange={onResultSplitRatioChange}
+        />
+      ) : null}
 
       <BindParametersModal
         open={activeTab.detectedBinds.length > 0}
@@ -600,25 +621,35 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
         }}
       />
 
-      <div style={{ flex: 1, overflow: "hidden", minHeight: MIN_RESULT_HEIGHT }}>
-        <ResultPanel
-          result={activeTab.result}
-          exportQuery={exportQuery}
-          batchResults={activeTab.batchResults}
-          error={activeTab.error}
-          executing={activeTab.executing}
-          isConnected={isConnected}
-          mutating={activeTab.mutating}
-          loadingMore={activeTab.loadingMore}
-          sorting={activeTab.sorting}
-          activeSort={activeTab.activeSort}
-          onLoadMore={loadMore}
-          onRefresh={refreshActive}
-          onSaveChanges={handleSaveChanges}
-          onSort={handleSort}
-          onCountRows={handleCountRows}
-        />
-      </div>
+      {activeTab.isResultVisible ? (
+        <div style={{ flex: 1, overflow: "hidden", minHeight: MIN_RESULT_HEIGHT }}>
+          <ResultPanel
+            result={activeTab.result}
+            exportQuery={exportQuery}
+            batchResults={activeTab.batchResults}
+            error={activeTab.error}
+            executing={activeTab.executing}
+            isConnected={isConnected}
+            mutating={activeTab.mutating}
+            loadingMore={activeTab.loadingMore}
+            sorting={activeTab.sorting}
+            activeSort={activeTab.activeSort}
+            onLoadMore={loadMore}
+            onRefresh={refreshActive}
+            onSaveChanges={handleSaveChanges}
+            onSort={handleSort}
+            onCountRows={handleCountRows}
+            onHide={() => applyPatch({ isResultVisible: false })}
+          />
+        </div>
+      ) : (
+        <div style={collapsedResultBarStyle}>
+          <span style={collapsedResultLabelStyle}>Results hidden</span>
+          <button type="button" onClick={showResults} style={showResultsButtonStyle}>
+            Show
+          </button>
+        </div>
+      )}
     </div>
   );
 });
@@ -631,3 +662,33 @@ function normalizeSortError(column: string, message?: string): string {
   }
   return `${fallback} ${message}`;
 }
+
+const collapsedResultBarStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  minHeight: COLLAPSED_RESULT_HEIGHT,
+  padding: "0 12px",
+  borderTop: "1px solid var(--border-color)",
+  background: "var(--panel-bg)",
+  color: "var(--text-secondary)",
+  fontSize: 11,
+  flexShrink: 0,
+};
+
+const collapsedResultLabelStyle: React.CSSProperties = {
+  textTransform: "uppercase",
+  letterSpacing: "0.04em",
+  fontWeight: 600,
+};
+
+const showResultsButtonStyle: React.CSSProperties = {
+  border: "none",
+  background: "transparent",
+  color: "var(--accent)",
+  cursor: "pointer",
+  fontSize: 11,
+  fontWeight: 600,
+  padding: 0,
+};

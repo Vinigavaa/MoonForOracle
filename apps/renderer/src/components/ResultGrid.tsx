@@ -1,4 +1,5 @@
 import { memo, useRef, useState, useEffect, useCallback, useMemo } from "react";
+import { EyeOff } from "lucide-react";
 import type { BindParameterValue, QueryExportColumn, QueryResultColumn, QueryResultRow, SqlExecutionResponse, UpdateRowRequest } from "@gavadb/types";
 import { formatDuration } from "@gavadb/utils";
 import { countRender } from "../lib/perfLog";
@@ -30,6 +31,7 @@ interface ResultGridProps {
   onSaveChanges?: (request: UpdateRowRequest[]) => Promise<{ error?: string }>;
   onSort?: (sort: SortState | null) => void;
   onCountRows?: () => Promise<{ totalRows?: number; error?: string }>;
+  onHide?: () => void;
 }
 
 interface PendingRowChange {
@@ -94,6 +96,7 @@ export const ResultGrid = memo(function ResultGrid({
   onSaveChanges,
   onSort,
   onCountRows,
+  onHide,
 }: ResultGridProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -478,12 +481,17 @@ export const ResultGrid = memo(function ResultGrid({
         >
           {exportInProgress ? "Exporting..." : "Export"}
         </button>
+        {onHide && (
+          <button type="button" onClick={onHide} style={iconButtonStyle} title="Hide results" aria-label="Hide results">
+            <EyeOff size={14} strokeWidth={1.8} />
+          </button>
+        )}
         {countError && <span style={countErrorStyle}>{countError}</span>}
         <span style={toolbarInfoStyle}>
           {canEditRows
             ? pendingRowIndexes.length > 0
               ? `${pendingRowIndexes.length} row(s) modified — use Commit to persist`
-              : "Editable — double-click or Enter to edit a cell"
+              : " "
             : editableInfo?.reason ?? "Read-only result"
           }
         </span>
@@ -673,6 +681,20 @@ const statusBarStyle: React.CSSProperties = { padding: "4px 12px", fontSize: 11,
 const mutedItalicStyle: React.CSSProperties = { color: "var(--text-muted)", fontStyle: "italic" };
 const primaryButtonStyle: React.CSSProperties = { padding: "3px 10px", fontSize: 11, background: "var(--button-primary-bg)", color: "var(--button-primary-text)", border: "none", borderRadius: "var(--radius)", fontWeight: 600 };
 const secondaryButtonStyle: React.CSSProperties = { padding: "3px 10px", fontSize: 11, background: "var(--button-secondary-bg)", border: "1px solid var(--border-color)", borderRadius: "var(--radius)", color: "var(--button-secondary-text)" };
+const iconButtonStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 28,
+  height: 24,
+  padding: 0,
+  background: "var(--button-secondary-bg)",
+  border: "1px solid var(--border-color)",
+  borderRadius: "var(--radius)",
+  color: "var(--button-secondary-text)",
+  cursor: "pointer",
+  flexShrink: 0,
+};
 const loadMoreButtonStyle: React.CSSProperties = { padding: "1px 10px", fontSize: 11, background: "transparent", border: "1px solid var(--accent)", borderRadius: "var(--radius)", color: "var(--accent)", cursor: "pointer" };
 const rowNumHeaderStyle: React.CSSProperties = { position: "sticky", top: 0, padding: "6px 10px", textAlign: "right", background: "var(--grid-header-bg)", borderBottom: "1px solid var(--border-color)", borderRight: "1px solid var(--border-subtle)", color: "var(--text-muted)", fontWeight: 400, fontSize: 11, width: 1, whiteSpace: "nowrap", zIndex: 1 };
 const sortableColHeaderStyle: React.CSSProperties = { position: "sticky", top: 0, padding: "6px 12px", textAlign: "left", background: "var(--grid-header-bg)", borderBottom: "1px solid var(--border-color)", color: "var(--accent)", fontWeight: 600, whiteSpace: "nowrap", zIndex: 1, cursor: "pointer", userSelect: "none" };

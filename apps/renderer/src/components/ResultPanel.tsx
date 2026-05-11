@@ -27,6 +27,7 @@ interface ResultPanelProps {
   onSaveChanges?: (request: UpdateRowRequest[]) => Promise<{ error?: string }>;
   onSort: (sort: SortState | null) => void;
   onCountRows?: () => Promise<{ totalRows?: number; error?: string }>;
+  onHide?: () => void;
 }
 
 export const ResultPanel = memo(function ResultPanel({
@@ -45,16 +46,16 @@ export const ResultPanel = memo(function ResultPanel({
   onSaveChanges,
   onSort,
   onCountRows,
+  onHide,
 }: ResultPanelProps) {
-  // When sorting, keep the grid visible (don't unmount) — show loading overlay via sorting prop
   if (executing && !sorting) {
     if (batchResults) {
       return <BatchResultPanel items={batchResults} />;
     }
     return (
-      <div style={centeredStyle}>
-        <span style={{ animation: "pulse 1s infinite" }}>Executing query...</span>
-      </div>
+        <div style={centeredStyle}>
+          <span style={{ animation: "pulse 1s infinite" }}>Executing query...</span>
+        </div>
     );
   }
 
@@ -83,9 +84,9 @@ export const ResultPanel = memo(function ResultPanel({
       return <BatchResultPanel items={batchResults} />;
     }
     return (
-      <div style={centeredStyle}>
-        {isConnected ? "Execute a query to see results" : "Connect to a database to get started"}
-      </div>
+        <div style={centeredStyle}>
+          {isConnected ? "Execute a query to see results" : "Connect to a database to get started"}
+        </div>
     );
   }
 
@@ -103,6 +104,7 @@ export const ResultPanel = memo(function ResultPanel({
         onSaveChanges={onSaveChanges}
         onSort={onSort}
         onCountRows={onCountRows}
+        onHide={onHide}
       />
     );
   }

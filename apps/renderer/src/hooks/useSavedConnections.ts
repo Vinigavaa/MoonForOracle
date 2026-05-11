@@ -6,11 +6,14 @@ export function useSavedConnections() {
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    const result = await window.gavadb.connListSaved();
-    if (result.success) {
-      setConnections(result.data);
+    try {
+      const result = await window.gavadb.connListSaved();
+      if (result.success) {
+        setConnections(result.data);
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {

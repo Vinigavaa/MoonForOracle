@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { DatabaseObjectType, ObjectDetailResponse } from "@gavadb/types";
 
 interface ObjectDetailState {
@@ -20,19 +20,25 @@ export function useObjectDetail(objectType: DatabaseObjectType, objectName: stri
     setError(null);
     setDetail(null);
 
-    window.gavadb.dbGetSource(objectType, objectName).then((result) => {
-      if (requestRef.current !== requestId) return;
-      if (result.success) {
-        setDetail(result.data);
-      } else {
-        setError(result.error.message + (result.error.details ? "\n" + result.error.details : ""));
+    void (async () => {
+      try {
+        const result = await window.gavadb.dbGetSource(objectType, objectName);
+        if (requestRef.current !== requestId) return;
+
+        if (result.success) {
+          setDetail(result.data);
+        } else {
+          setError(result.error.message + (result.error.details ? "\n" + result.error.details : ""));
+        }
+      } catch (err) {
+        if (requestRef.current !== requestId) return;
+        setError(String(err));
+      } finally {
+        if (requestRef.current === requestId) {
+          setLoading(false);
+        }
       }
-      setLoading(false);
-    }).catch((err) => {
-      if (requestRef.current !== requestId) return;
-      setError(String(err));
-      setLoading(false);
-    });
+    })();
   }, [objectType, objectName]);
 
   useEffect(() => { fetch(); }, [fetch]);

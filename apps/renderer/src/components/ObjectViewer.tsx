@@ -108,7 +108,7 @@ function TableView({
   detail: Extract<ObjectDetailResponse, { kind: "table" }>;
   onViewSql?: (type: DatabaseObjectType, name: string) => void;
 }) {
-  const handleViewSql = useCallback(async () => {
+  const handleViewSql = useCallback(() => {
     onViewSql?.("tables", detail.objectName);
   }, [detail.objectName, onViewSql]);
 
@@ -148,7 +148,7 @@ function ViewView({
   detail: Extract<ObjectDetailResponse, { kind: "view" }>;
   onViewSql?: (type: DatabaseObjectType, name: string) => void;
 }) {
-  const handleViewSql = useCallback(async () => {
+  const handleViewSql = useCallback(() => {
     onViewSql?.("views", detail.objectName);
   }, [detail.objectName, onViewSql]);
 

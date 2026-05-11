@@ -246,7 +246,6 @@ function renderTabContent({
         ref={paneRef}
         activeTab={tab}
         isConnected={isConnected}
-        activeConnectionId={activeConnectionId}
         resultSplitRatio={resultSplitRatio}
         onResultSplitRatioChange={onResultSplitRatioChange}
         onUpdateTab={(tabId, patch) => onUpdateTab(tabId, patch)}
