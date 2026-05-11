@@ -1,7 +1,9 @@
 import { memo } from "react";
-import type { BindParameterValue, QueryExportColumn, SqlExecutionResponse, UpdateRowRequest } from "@gavadb/types";
+import type { BindParameterValue, DbmsOutputLine, QueryExportColumn, SqlExecutionResponse, UpdateRowRequest } from "@gavadb/types";
 import type { BatchStatementExecution } from "../lib/sqlBatchExecution";
 import { BatchResultPanel } from "./BatchResultPanel";
+import { DbmsOutputViewer } from "./DbmsOutputViewer";
+import { QueryResultTabs } from "./QueryResultTabs";
 import { ResultGrid, type SortState } from "./ResultGrid";
 import { StatementFeedback } from "./StatementFeedback";
 
@@ -15,6 +17,7 @@ interface ResultPanelProps {
     suggestedFileName?: string;
   } | null;
   batchResults?: BatchStatementExecution[] | null;
+  dbmsOutput?: DbmsOutputLine[];
   error: string | null;
   executing: boolean;
   isConnected: boolean;
@@ -34,6 +37,7 @@ export const ResultPanel = memo(function ResultPanel({
   result,
   exportQuery,
   batchResults,
+  dbmsOutput = [],
   error,
   executing,
   isConnected,
@@ -48,6 +52,8 @@ export const ResultPanel = memo(function ResultPanel({
   onCountRows,
   onHide,
 }: ResultPanelProps) {
+  const hasDbmsOutput = dbmsOutput.length > 0;
+
   if (executing && !sorting) {
     if (batchResults) {
       return <BatchResultPanel items={batchResults} />;
@@ -60,21 +66,30 @@ export const ResultPanel = memo(function ResultPanel({
   }
 
   if (error) {
+    if (hasDbmsOutput) {
+      return (
+        <div style={stackedPanelStyle}>
+          <div style={errorWrapStyle}>
+            <div style={errorStyle}>{error}</div>
+          </div>
+          <div style={tabContentStyle}>
+            <QueryResultTabs
+              items={[
+                {
+                  id: "dbms-output",
+                  label: `DBMS Output (${dbmsOutput.length})`,
+                  content: <DbmsOutputViewer lines={dbmsOutput} />,
+                },
+              ]}
+            />
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div style={{ padding: 16, height: "100%", overflow: "auto" }}>
-        <div style={{
-          padding: 12,
-          background: "var(--selected-bg)",
-          border: "1px solid var(--danger)",
-          borderRadius: "var(--radius)",
-          fontSize: "var(--font-size-sm)",
-          fontFamily: "var(--font-ui)",
-          color: "var(--danger)",
-          whiteSpace: "pre-wrap",
-          lineHeight: 1.6,
-        }}>
-          {error}
-        </div>
+        <div style={errorStyle}>{error}</div>
       </div>
     );
   }
@@ -91,7 +106,7 @@ export const ResultPanel = memo(function ResultPanel({
   }
 
   if (result.statementType === "select") {
-    return (
+    const grid = (
       <ResultGrid
         result={result}
         exportQuery={exportQuery}
@@ -107,9 +122,34 @@ export const ResultPanel = memo(function ResultPanel({
         onHide={onHide}
       />
     );
+
+    if (!hasDbmsOutput) {
+      return grid;
+    }
+
+    return (
+      <QueryResultTabs
+        items={[
+          { id: "result-grid", label: "Result Grid", content: grid },
+          { id: "dbms-output", label: `DBMS Output (${dbmsOutput.length})`, content: <DbmsOutputViewer lines={dbmsOutput} /> },
+        ]}
+      />
+    );
   }
 
-  return <StatementFeedback result={result} />;
+  const feedback = <StatementFeedback result={result} />;
+  if (!hasDbmsOutput) {
+    return feedback;
+  }
+
+  return (
+    <QueryResultTabs
+      items={[
+        { id: "result", label: "Result", content: feedback },
+        { id: "dbms-output", label: `DBMS Output (${dbmsOutput.length})`, content: <DbmsOutputViewer lines={dbmsOutput} /> },
+      ]}
+    />
+  );
 });
 
 const centeredStyle: React.CSSProperties = {
@@ -119,4 +159,35 @@ const centeredStyle: React.CSSProperties = {
   height: "100%",
   color: "var(--text-muted)",
   fontSize: "var(--font-size-sm)",
+};
+
+const stackedPanelStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  height: "100%",
+  minHeight: 0,
+};
+
+const errorWrapStyle: React.CSSProperties = {
+  padding: 16,
+  borderBottom: "1px solid var(--border-color)",
+  background: "var(--panel-bg)",
+  flexShrink: 0,
+};
+
+const tabContentStyle: React.CSSProperties = {
+  flex: 1,
+  minHeight: 0,
+};
+
+const errorStyle: React.CSSProperties = {
+  padding: 12,
+  background: "var(--selected-bg)",
+  border: "1px solid var(--danger)",
+  borderRadius: "var(--radius)",
+  fontSize: "var(--font-size-sm)",
+  fontFamily: "var(--font-ui)",
+  color: "var(--danger)",
+  whiteSpace: "pre-wrap",
+  lineHeight: 1.6,
 };

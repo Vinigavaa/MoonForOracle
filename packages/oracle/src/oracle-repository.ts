@@ -3,10 +3,12 @@ import path from "node:path";
 import oracledb from "oracledb";
 import type { Connection } from "oracledb";
 import type {
+  AppError,
   ConnectionConfig,
   CompileError,
   CompileObjectRequest,
   CompileResult,
+  DbmsOutputLine,
   DbObjectType,
   DeleteRowsRequest,
   EditableQueryInfo,
@@ -54,6 +56,8 @@ import {
 const DEFAULT_PAGE_SIZE = 200;
 const MAX_PAGE_SIZE = 500;
 const CONNECT_TIMEOUT_MS = 15_000;
+const DBMS_OUTPUT_FETCH_CHUNK_SIZE = 100;
+const DBMS_OUTPUT_LINE_MAX_SIZE = 32_767;
 
 /**
  * Interface do repositório de acesso ao banco de dados.
@@ -214,12 +218,15 @@ export class OracleRepository implements DatabaseRepository {
     const stmtType = detectStatementType(request.sql);
     const isSelect = stmtType === "select";
     const start = performance.now();
+    const binds = buildOracleBinds(request.binds);
+
+    await this.prepareDbmsOutput(conn);
 
     try {
-      const binds = buildOracleBinds(request.binds);
-
       if (isSelect) {
-        return await this.executeSelect(conn, request.sql, pageSize, offset, start, request.orderBy, binds);
+        const result = await this.executeSelect(conn, request.sql, pageSize, offset, start, request.orderBy, binds);
+        const dbmsOutput = await this.consumeDbmsOutput(conn);
+        return { ...result, dbmsOutput };
       }
 
       const result = await conn.execute(
@@ -232,6 +239,7 @@ export class OracleRepository implements DatabaseRepository {
         this.pendingTransaction = true;
       }
 
+      const dbmsOutput = await this.consumeDbmsOutput(conn);
       return {
         columns: [],
         rows: [],
@@ -242,9 +250,11 @@ export class OracleRepository implements DatabaseRepository {
         totalFetched: 0,
         statementType: stmtType,
         rowsAffected: result.rowsAffected ?? 0,
+        dbmsOutput,
       };
     } catch (err) {
-      throw normalizeOracleError(err);
+      const dbmsOutput = await this.consumeDbmsOutput(conn);
+      throw attachDbmsOutputToError(err, dbmsOutput);
     }
   }
 
@@ -354,32 +364,35 @@ export class OracleRepository implements DatabaseRepository {
     );
 
     const rs = result.resultSet!;
-    const columns: QueryResultColumn[] = (rs.metaData ?? []).map((meta) => ({
-      name: meta.name,
-      dataType: meta.dbTypeName ?? "UNKNOWN",
-    }));
+    try {
+      const columns: QueryResultColumn[] = (rs.metaData ?? []).map((meta) => ({
+        name: meta.name,
+        dataType: meta.dbTypeName ?? "UNKNOWN",
+      }));
 
-    // Stream only the rows we need (pageSize + 1 to detect hasMore)
-    const fetchedRows = sanitizeQueryRows(await rs.getRows(pageSize + 1) as QueryResultRow[]);
-    await rs.close();
+      // Stream only the rows we need (pageSize + 1 to detect hasMore)
+      const fetchedRows = sanitizeQueryRows(await rs.getRows(pageSize + 1) as QueryResultRow[]);
 
-    const hasMore = fetchedRows.length > pageSize;
-    const rows = hasMore ? fetchedRows.slice(0, pageSize) : fetchedRows;
-    const executionTimeMs = Math.round(performance.now() - start);
-    const editable = await this.resolveEditableQueryInfo(conn, sql, columns);
+      const hasMore = fetchedRows.length > pageSize;
+      const rows = hasMore ? fetchedRows.slice(0, pageSize) : fetchedRows;
+      const executionTimeMs = Math.round(performance.now() - start);
+      const editable = await this.resolveEditableQueryInfo(conn, sql, columns);
 
-    return {
-      columns,
-      rows,
-      rowCount: rows.length,
-      executionTimeMs,
-      hasMore,
-      offset,
-      totalFetched: offset + rows.length,
-      statementType: "select",
-      rowsAffected: 0,
-      editable,
-    };
+      return {
+        columns,
+        rows,
+        rowCount: rows.length,
+        executionTimeMs,
+        hasMore,
+        offset,
+        totalFetched: offset + rows.length,
+        statementType: "select",
+        rowsAffected: 0,
+        editable,
+      };
+    } finally {
+      await rs.close().catch(() => undefined);
+    }
   }
 
   async inferBinds(sql: string): Promise<BindMetadata[]> {
@@ -657,6 +670,65 @@ export class OracleRepository implements DatabaseRepository {
       throw normalizeOracleError(new Error("Not connected to any database"));
     }
     return this.connection;
+  }
+
+  private async prepareDbmsOutput(conn: Connection): Promise<void> {
+    try {
+      await conn.execute(`
+        BEGIN
+          DBMS_OUTPUT.ENABLE(NULL);
+        END;
+      `);
+      await this.consumeDbmsOutput(conn);
+    } catch (err) {
+      console.warn("[Oracle] Failed to initialize DBMS_OUTPUT:", (err as Error).message);
+    }
+  }
+
+  private async consumeDbmsOutput(conn: Connection): Promise<DbmsOutputLine[]> {
+    try {
+      const lines: DbmsOutputLine[] = [];
+
+      while (true) {
+        const result = await conn.execute(
+          `
+            BEGIN
+              DBMS_OUTPUT.GET_LINES(:lines, :numLines);
+            END;
+          `,
+          {
+            lines: {
+              dir: oracledb.BIND_OUT,
+              type: oracledb.STRING,
+              maxArraySize: DBMS_OUTPUT_FETCH_CHUNK_SIZE,
+              maxSize: DBMS_OUTPUT_LINE_MAX_SIZE,
+            },
+            numLines: {
+              dir: oracledb.BIND_INOUT,
+              type: oracledb.NUMBER,
+              val: DBMS_OUTPUT_FETCH_CHUNK_SIZE,
+            },
+          },
+          { autoCommit: false },
+        );
+
+        const outBinds = result.outBinds as {
+          lines?: string[] | null;
+          numLines?: number | null;
+        };
+
+        const fetchedCount = Math.max(0, Math.trunc(outBinds.numLines ?? 0));
+        const fetchedLines = (outBinds.lines ?? []).slice(0, fetchedCount);
+        lines.push(...fetchedLines.map((line) => ({ line: line ?? "" })));
+
+        if (fetchedCount < DBMS_OUTPUT_FETCH_CHUNK_SIZE) {
+          return lines;
+        }
+      }
+    } catch (err) {
+      console.warn("[Oracle] Failed to consume DBMS_OUTPUT:", (err as Error).message);
+      return [];
+    }
   }
 
   private async fetchTableDetail(conn: Connection, name: string): Promise<ObjectDetailResponse> {
@@ -1391,6 +1463,21 @@ function sanitizeQueryValue(value: unknown): unknown {
 function isPlainObject(value: object): boolean {
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
+}
+
+function attachDbmsOutputToError(err: unknown, dbmsOutput: DbmsOutputLine[]): AppError {
+  const normalized = isAppError(err) ? err : normalizeOracleError(err);
+  if (dbmsOutput.length === 0) {
+    return normalized;
+  }
+  return { ...normalized, dbmsOutput };
+}
+
+function isAppError(value: unknown): value is AppError {
+  return typeof value === "object"
+    && value !== null
+    && "code" in value
+    && "message" in value;
 }
 
 function stringifyDriverValue(value: object): string {

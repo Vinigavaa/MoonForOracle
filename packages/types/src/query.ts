@@ -1,13 +1,18 @@
-/** Metadados de uma coluna no resultado */
+/** Metadata for a result-set column */
 export interface QueryResultColumn {
   name: string;
   dataType: string;
 }
 
-/** Uma linha do resultado — chave é o nome da coluna */
+/** One line emitted by DBMS_OUTPUT */
+export interface DbmsOutputLine {
+  line: string;
+}
+
+/** One row in a query result, keyed by column name */
 export type QueryResultRow = Record<string, unknown>;
 
-/** Informações sobre editabilidade de um resultado SELECT */
+/** Inline editing metadata for a SELECT result */
 export interface EditableQueryInfo {
   enabled: boolean;
   reason?: string;
@@ -15,7 +20,7 @@ export interface EditableQueryInfo {
   primaryKeyColumns?: string[];
 }
 
-/** Alteração pendente em uma linha retornada por um SELECT editável */
+/** Pending update for an editable SELECT row */
 export interface UpdateRowRequest {
   tableName: string;
   primaryKey: QueryResultRow;
@@ -23,62 +28,62 @@ export interface UpdateRowRequest {
   changes: QueryResultRow;
 }
 
-/** Exclusão pendente de uma ou mais linhas retornadas por um SELECT editável */
+/** Pending deletion of one or more SELECT rows */
 export interface DeleteRowsRequest {
   tableName: string;
   primaryKeys: QueryResultRow[];
 }
 
-/** Resultado de uma operação de mutação */
+/** Result of a mutation operation */
 export interface MutationResult {
   rowsAffected: number;
 }
 
-/** Request para contagem total de linhas de uma query */
+/** Request to count total rows for a query */
 export interface CountRowsRequest {
   sql: string;
-  /** Binds usados na query original (mesmo formato do SqlExecutionRequest) */
+  /** Binds used in the original query */
   binds?: Record<string, BindParameterValue>;
 }
 
-/** Response da contagem total de linhas */
+/** Response for a row-count request */
 export interface CountRowsResponse {
   totalRows: number;
   executionTimeMs: number;
 }
 
-/** Tipo lógico inferido para um bind parameter */
+/** Logical type inferred for a bind parameter */
 export type BindDataType = "NUMBER" | "VARCHAR" | "DATE" | "TIMESTAMP" | "UNKNOWN";
 
-/** Valor de um bind parameter enviado pelo renderer */
+/** Bind parameter value sent by the renderer */
 export interface BindParameterValue {
-  /** Valor cru digitado pelo usuário (string/number/boolean/null) */
+  /** Raw value entered by the user */
   value: unknown;
-  /** Tipo lógico escolhido/inferido (para conversão no lado Oracle) */
+  /** Selected or inferred logical type */
   type?: BindDataType;
-  /** Quando true, envia NULL independentemente de value */
+  /** When true, sends NULL regardless of value */
   isNull?: boolean;
 }
 
-/** Metadados inferidos para um bind — alimenta a UI de parâmetros */
+/** Inferred bind metadata used by the UI */
 export interface BindMetadata {
   name: string;
   dataType: BindDataType;
-  /** true se a inferência veio do dicionário Oracle, false se é fallback genérico */
+  /** Whether the type came from Oracle metadata instead of a fallback */
   inferred: boolean;
   nullable: boolean;
-  /** Tamanho máximo para VARCHAR/CHAR */
+  /** Maximum length for VARCHAR/CHAR */
   length?: number;
   precision?: number;
   scale?: number;
-  /** Nome de coluna/tabela resolvidos, quando aplicável */
+  /** Resolved column/table name when available */
   column?: string;
   table?: string;
-  /** Motivo pelo qual não foi possível inferir (debug/ui hint) */
+  /** Hint explaining why inference was not precise */
   reason?: string;
 }
 
-/** Request enviado ao backend para inferir metadados dos binds de uma query */
+/** Request sent to infer bind metadata for a query */
 export interface InferBindsRequest {
   sql: string;
 }
@@ -103,39 +108,40 @@ export interface SqlColumnSuggestion {
   dataType: string;
 }
 
-/** Request para execução de SQL via IPC */
+/** Request for SQL execution via IPC */
 export interface SqlExecutionRequest {
   sql: string;
-  /** Limite de linhas por página (default: 200) */
+  /** Row limit per page (default: 200) */
   pageSize?: number;
-  /** Offset para paginação — quantas linhas pular */
+  /** Pagination offset */
   offset?: number;
-  /** Ordenação aplicada pelo grid (coluna + direção) */
+  /** Grid sorting */
   orderBy?: { column: string; direction: "asc" | "desc" };
-  /** Bind parameters reais (node-oracledb), chaveados pelo nome do bind */
+  /** Real bind parameters for node-oracledb */
   binds?: Record<string, BindParameterValue>;
 }
 
-/** Tipo de statement SQL detectado */
-
+/** Detected SQL statement kind */
 export type SqlStatementType = "select" | "dml" | "ddl" | "plsql" | "unknown";
 
-/** Response padronizada de execução de SQL */
+/** Standard SQL execution response */
 export interface SqlExecutionResponse {
   columns: QueryResultColumn[];
   rows: QueryResultRow[];
   rowCount: number;
   executionTimeMs: number;
-  /** true se existem mais linhas além desta página */
+  /** True when more rows exist beyond this page */
   hasMore: boolean;
-  /** Offset usado nesta requisição */
+  /** Offset used for this request */
   offset: number;
-  /** Total de linhas retornadas até agora (soma acumulada no frontend) */
+  /** Total rows accumulated so far in the frontend */
   totalFetched: number;
-  /** Tipo de statement executado */
+  /** Executed statement kind */
   statementType: SqlStatementType;
-  /** Linhas afetadas por DML (INSERT, UPDATE, DELETE, MERGE) */
+  /** Rows affected by DML */
   rowsAffected: number;
-  /** Metadados para edição inline segura, quando aplicável */
+  /** Lines emitted via DBMS_OUTPUT during execution */
+  dbmsOutput?: DbmsOutputLine[];
+  /** Inline editing metadata when applicable */
   editable?: EditableQueryInfo;
 }

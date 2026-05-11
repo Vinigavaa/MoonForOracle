@@ -1,6 +1,7 @@
 import type {
   BindMetadata,
   BindParameterValue,
+  DbmsOutputLine,
   DatabaseObjectType,
   QueryResultRow,
   SqlExecutionResponse,
@@ -27,6 +28,7 @@ export interface QueryTabState {
   isResultVisible: boolean;
   result: SqlExecutionResponse | null;
   batchResults: BatchStatementExecution[] | null;
+  dbmsOutput: DbmsOutputLine[];
   allRows: QueryResultRow[];
   executedSql: string | null;
   executedBinds: Record<string, BindParameterValue> | null;
@@ -100,6 +102,7 @@ export function createQueryTab(connectionId: string | null = null, partial?: Par
     isResultVisible: partial?.isResultVisible ?? initialSql.trim().length > 0,
     result: partial?.result ?? null,
     batchResults: partial?.batchResults ?? null,
+    dbmsOutput: partial?.dbmsOutput ?? [],
     allRows: partial?.allRows ?? [],
     executedSql: partial?.executedSql ?? null,
     executedBinds: partial?.executedBinds ?? null,

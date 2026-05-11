@@ -1,9 +1,13 @@
-/** Erro estruturado do app — trafega via IPC ao invés de strings soltas */
+import type { DbmsOutputLine } from "./query";
+
+/** Structured app error transported through IPC */
 export interface AppError {
   code: AppErrorCode;
   message: string;
-  /** Detalhes extras para debug (ex: ORA-xxxxx, stack trace) */
+  /** Extra debug details such as ORA-xxxxx text */
   details?: string;
+  /** Partial DBMS_OUTPUT captured from the Oracle session when available */
+  dbmsOutput?: DbmsOutputLine[];
 }
 
 export type AppErrorCode =

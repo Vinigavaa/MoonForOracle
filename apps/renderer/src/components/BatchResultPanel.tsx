@@ -1,3 +1,4 @@
+import { DbmsOutputViewer } from "./DbmsOutputViewer";
 import { ResultGrid } from "./ResultGrid";
 import { StatementFeedback } from "./StatementFeedback";
 import type { BatchStatementExecution } from "../lib/sqlBatchExecution";
@@ -44,6 +45,17 @@ export function BatchResultPanel({ items }: BatchResultPanelProps) {
             ) : item.result ? (
               <div style={feedbackWrapStyle}>
                 <StatementFeedback result={item.result} />
+              </div>
+            ) : null}
+
+            {item.dbmsOutput.length > 0 ? (
+              <div style={outputSectionStyle}>
+                <div style={outputHeaderStyle}>
+                  DBMS Output ({item.dbmsOutput.length})
+                </div>
+                <div style={outputViewerWrapStyle}>
+                  <DbmsOutputViewer lines={item.dbmsOutput} />
+                </div>
               </div>
             ) : null}
           </section>
@@ -127,6 +139,23 @@ const gridWrapStyle: React.CSSProperties = {
 
 const feedbackWrapStyle: React.CSSProperties = {
   height: 140,
+};
+
+const outputSectionStyle: React.CSSProperties = {
+  borderTop: "1px solid var(--border-subtle)",
+};
+
+const outputHeaderStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  fontSize: 11,
+  fontWeight: 600,
+  color: "var(--text-secondary)",
+  background: "var(--panel-bg)",
+  borderBottom: "1px solid var(--border-subtle)",
+};
+
+const outputViewerWrapStyle: React.CSSProperties = {
+  height: 220,
 };
 
 const emptyStyle: React.CSSProperties = {

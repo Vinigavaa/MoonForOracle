@@ -1,4 +1,4 @@
-import type { SqlExecutionResponse } from "@gavadb/types";
+import type { DbmsOutputLine, SqlExecutionResponse } from "@gavadb/types";
 import type { EditorExecutionTarget } from "./sqlExecutionTarget";
 
 export interface BatchStatementExecution {
@@ -6,4 +6,5 @@ export interface BatchStatementExecution {
   target: EditorExecutionTarget;
   result: SqlExecutionResponse | null;
   error: string | null;
+  dbmsOutput: DbmsOutputLine[];
 }

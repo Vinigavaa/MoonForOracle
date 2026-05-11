@@ -4,6 +4,7 @@ import type {
   BindMetadata,
   BindParameterValue,
   CountRowsResponse,
+  DbmsOutputLine,
   MutationResult,
   SqlExecutionResponse,
   UpdateRowRequest,
@@ -17,6 +18,7 @@ interface InferBindsResult {
 interface ExecutionResult {
   data?: SqlExecutionResponse;
   error?: string;
+  dbmsOutput?: DbmsOutputLine[];
 }
 
 interface MutationExecutionResult {
@@ -48,9 +50,9 @@ export function useSqlExecution() {
         binds: options?.binds,
       });
       if (res.success) {
-        return { data: res.data };
+        return { data: res.data, dbmsOutput: res.data.dbmsOutput };
       }
-      return { error: formatError(res.error) };
+      return { error: formatError(res.error), dbmsOutput: res.error.dbmsOutput };
     } catch (err) {
       console.error("[SQL Execution] execute failed", err);
       return { error: formatUnknownError(err) };

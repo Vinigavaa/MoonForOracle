@@ -13,6 +13,7 @@ import { extractBindParameters } from "@gavadb/utils";
 import { useObjectResolver } from "../../hooks/useObjectResolver";
 import { useSqlExecution } from "../../hooks/useSqlExecution";
 import { useToastContext } from "../../hooks/ToastContext";
+import type { BatchStatementExecution } from "../../lib/sqlBatchExecution";
 import { resolveAllExecutionTargets, resolveSingleExecutionTarget } from "../../lib/sqlExecutionTarget";
 import { BindParametersModal } from "../BindParametersModal";
 import { ResultPanel } from "../ResultPanel";
@@ -125,6 +126,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
       allRows: [],
       result: null,
       batchResults: null,
+      dbmsOutput: [],
       executedSql: sql,
       executedBinds: binds ?? null,
       activeSort: null,
@@ -137,6 +139,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
       if (result.data) {
         applyPatch({
           result: result.data,
+          dbmsOutput: result.data.dbmsOutput ?? [],
           allRows: result.data.rows,
           executedSql: sql,
           error: null,
@@ -149,6 +152,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
       applyPatch({
         error: result.error ?? "Unknown error",
         result: null,
+        dbmsOutput: result.dbmsOutput ?? [],
         allRows: [],
       });
     } catch (error) {
@@ -156,6 +160,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
       applyPatch({
         error: error instanceof Error ? error.message : String(error),
         result: null,
+        dbmsOutput: [],
         allRows: [],
       });
     } finally {
@@ -205,6 +210,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
       allRows: [],
       result: null,
       batchResults: null,
+      dbmsOutput: [],
       executedSql: target.sql,
       executedBinds: null,
       activeSort: null,
@@ -217,6 +223,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
       if (result.data) {
         applyPatch({
           result: result.data,
+          dbmsOutput: result.data.dbmsOutput ?? [],
           allRows: result.data.rows,
           executedSql: target.sql,
           error: null,
@@ -229,6 +236,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
       applyPatch({
         error: result.error ?? "Unknown error",
         result: null,
+        dbmsOutput: result.dbmsOutput ?? [],
         allRows: [],
       });
     } catch (error) {
@@ -236,6 +244,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
       applyPatch({
         error: error instanceof Error ? error.message : String(error),
         result: null,
+        dbmsOutput: [],
         allRows: [],
       });
     } finally {
@@ -270,12 +279,13 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
       result: null,
       allRows: [],
       batchResults: [],
+      dbmsOutput: [],
       executedSql: null,
       activeSort: null,
       sorting: false,
     });
 
-    const batchResults = [];
+    const batchResults: BatchStatementExecution[] = [];
     let hasPendingTransaction = activeTab.hasPendingTransaction;
     let shouldRestoreFocus = false;
 
@@ -294,6 +304,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
             target,
             result: result.data ?? null,
             error: result.error ?? null,
+            dbmsOutput: result.data?.dbmsOutput ?? result.dbmsOutput ?? [],
           });
           applyPatch({ batchResults: [...batchResults], hasPendingTransaction });
         } catch (error) {
@@ -303,6 +314,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
             target,
             result: null,
             error: error instanceof Error ? error.message : String(error),
+            dbmsOutput: [],
           });
           applyPatch({ batchResults: [...batchResults], hasPendingTransaction });
         }
@@ -319,6 +331,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
 
     const previousResult = activeTab.result;
     const previousRows = activeTab.allRows;
+    const previousDbmsOutput = activeTab.dbmsOutput;
     applyPatch({ executing: true, error: null, batchResults: null });
 
     let shouldRestoreFocus = false;
@@ -331,6 +344,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
       if (result.data) {
         applyPatch({
           result: result.data,
+          dbmsOutput: result.data.dbmsOutput ?? [],
           allRows: result.data.rows,
           executedSql: sql,
           error: null,
@@ -341,6 +355,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
       shouldRestoreFocus = true;
       applyPatch({
         result: previousResult,
+        dbmsOutput: previousDbmsOutput,
         allRows: previousRows,
         error: null,
       });
@@ -349,6 +364,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
       shouldRestoreFocus = true;
       applyPatch({
         result: previousResult,
+        dbmsOutput: previousDbmsOutput,
         allRows: previousRows,
         error: null,
       });
@@ -356,7 +372,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
     } finally {
       recoverUiState(shouldRestoreFocus);
     }
-  }, [activeTab.activeSort, activeTab.allRows, activeTab.executedBinds, activeTab.executedSql, activeTab.result, applyPatch, execute, recoverUiState, toast]);
+  }, [activeTab.activeSort, activeTab.allRows, activeTab.dbmsOutput, activeTab.executedBinds, activeTab.executedSql, activeTab.result, applyPatch, execute, recoverUiState, toast]);
 
   const handleSaveChanges = useCallback(async (request: UpdateRowRequest[]) => {
     applyPatch({ mutating: true });
@@ -407,6 +423,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
       if (result.data) {
         applyPatch({
           result: result.data,
+          dbmsOutput: result.data.dbmsOutput ?? [],
           allRows: result.data.rows,
           error: null,
           activeSort: sort,
@@ -465,6 +482,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
             totalFetched: newAllRows.length,
             hasMore: capped ? false : result.data.hasMore,
           },
+          dbmsOutput: activeTab.dbmsOutput,
           allRows: newAllRows,
           loadingMore: false,
         });
@@ -627,6 +645,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
             result={activeTab.result}
             exportQuery={exportQuery}
             batchResults={activeTab.batchResults}
+            dbmsOutput={activeTab.dbmsOutput}
             error={activeTab.error}
             executing={activeTab.executing}
             isConnected={isConnected}

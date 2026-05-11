@@ -19,6 +19,7 @@ export type {
   ObjectDetailResponse,
 } from "./database";
 export type {
+  DbmsOutputLine,
   QueryResultColumn,
   QueryResultRow,
   EditableQueryInfo,
