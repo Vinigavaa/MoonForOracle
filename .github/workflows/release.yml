@@ -41,6 +41,9 @@ jobs:
             throw "Release tag '$actual' must match apps/desktop/package.json version '$expected'."
           }
 
+      - name: Build workspace packages
+        run: pnpm run build
+
       - name: Build & publish desktop installer
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
