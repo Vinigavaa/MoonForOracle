@@ -1,6 +1,15 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import type { ConnectionStatus } from "@gavadb/types";
-import { Settings } from "lucide-react";
+import {
+  Settings,
+  Check,
+  RotateCcw,
+  Plug,
+  Unplug,
+  Play,
+  CircleDot,
+  CircleCheck,
+} from "lucide-react";
 import moonForOracleLogo from "../assets/MoonForOracle.png";
 
 interface ToolbarProps {
@@ -12,7 +21,6 @@ interface ToolbarProps {
   onCommit: () => void;
   onRollback: () => void;
   onExecuteSql: () => void;
-  onExecuteAllSql: () => void;
   isConnected: boolean;
   transactionBusy?: boolean;
   onOpenPreferences: () => void;
@@ -41,7 +49,6 @@ export function Toolbar({
   onCommit,
   onRollback,
   onExecuteSql,
-  onExecuteAllSql,
   isConnected,
   transactionBusy,
   onOpenPreferences,
@@ -119,15 +126,24 @@ export function Toolbar({
       <div style={{ flex: 1 }} />
 
       {isConnected && (
-        <span style={{
-          padding: "2px 8px",
-          border: `1px solid ${hasPendingTransaction ? "var(--status-pending)" : "var(--border-color)"}`,
-          color: hasPendingTransaction ? "var(--status-pending)" : "var(--text-muted)",
-          fontSize: 11,
-          fontWeight: 600,
-          background: hasPendingTransaction ? "var(--selected-bg)" : "transparent",
-        }}>
-          {hasPendingTransaction ? "Pending transaction" : "No pending transaction"}
+        <span
+          aria-label={hasPendingTransaction ? "Pending transaction" : "No pending transaction"}
+          title={hasPendingTransaction ? "Pending transaction" : "No pending transaction"}
+          style={{
+            width: 30,
+            height: 30,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: hasPendingTransaction ? "var(--status-pending)" : "var(--text-muted)",
+            background: hasPendingTransaction ? "var(--selected-bg)" : "transparent",
+          }}
+        >
+          {hasPendingTransaction ? (
+            <CircleDot size={15} strokeWidth={1.9} aria-hidden="true" />
+          ) : (
+            <CircleCheck size={15} strokeWidth={1.9} aria-hidden="true" />
+          )}
         </span>
       )}
 
@@ -135,33 +151,50 @@ export function Toolbar({
         className="app-no-drag"
         onClick={onCommit}
         disabled={!isConnected || !hasPendingTransaction || !!transactionBusy}
+        aria-label="Commit"
+        title="Commit"
         style={{
-          background: "transparent",
+          ...iconButtonStyle,
           color: hasPendingTransaction ? "var(--success)" : undefined,
-          border: "1px solid var(--border-color)",
-          fontWeight: 600,
         }}
       >
-        Commit
+        <Check size={15} strokeWidth={1.9} aria-hidden="true" />
       </button>
       <button
         className="app-no-drag"
         onClick={onRollback}
         disabled={!isConnected || !hasPendingTransaction || !!transactionBusy}
+        aria-label="Rollback"
+        title="Rollback"
         style={{
-          background: "transparent",
+          ...iconButtonStyle,
           color: hasPendingTransaction ? "var(--danger)" : undefined,
-          border: "1px solid var(--border-color)",
-          fontWeight: 600,
         }}
       >
-        Rollback
+        <RotateCcw size={15} strokeWidth={1.9} aria-hidden="true" />
       </button>
 
       {isConnected ? (
-        <button className="app-no-drag" onClick={onDisconnect} disabled={!!transactionBusy}>Disconnect</button>
+        <button
+          className="app-no-drag"
+          onClick={onDisconnect}
+          disabled={!!transactionBusy}
+          aria-label="Disconnect"
+          title="Disconnect"
+          style={iconButtonStyle}
+        >
+          <Unplug size={15} strokeWidth={1.9} aria-hidden="true" />
+        </button>
       ) : (
-        <button className="app-no-drag" onClick={onConnect}>Connect...</button>
+        <button
+          className="app-no-drag"
+          onClick={onConnect}
+          aria-label="Connect..."
+          title="Connect..."
+          style={iconButtonStyle}
+        >
+          <Plug size={15} strokeWidth={1.9} aria-hidden="true" />
+        </button>
       )}
 
       <div style={{ width: 1, height: 18, background: "var(--border-color)" }} />
@@ -170,27 +203,15 @@ export function Toolbar({
         className="app-no-drag"
         onClick={onExecuteSql}
         disabled={!isConnected}
+        aria-label="Execute"
+        title="Execute"
         style={{
+          ...iconButtonStyle,
           background: isConnected ? "var(--button-primary-bg)" : undefined,
           color: isConnected ? "var(--button-primary-text)" : undefined,
-          border: "none",
-          fontWeight: 600,
         }}
       >
-        ▶ Execute
-      </button>
-      <button
-        className="app-no-drag"
-        onClick={onExecuteAllSql}
-        disabled={!isConnected}
-        style={{
-          background: "transparent",
-          color: isConnected ? "var(--text-primary)" : undefined,
-          border: "1px solid var(--border-color)",
-          fontWeight: 600,
-        }}
-      >
-        Execute All
+        <Play size={15} strokeWidth={1.9} aria-hidden="true" />
       </button>
 
       <button
@@ -222,6 +243,18 @@ export function Toolbar({
     </div>
   );
 }
+
+const iconButtonStyle: CSSProperties = {
+  width: 30,
+  minWidth: 30,
+  height: 30,
+  padding: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  border: "none",
+  background: "transparent",
+};
 
 const preferencesButtonStyle: CSSProperties = {
   width: 30,

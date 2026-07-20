@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { findStatementAtCursor, parseSqlStatements, resolveSqlSelection } from "./sql-statements.js";
+import { findStatementAtCursor, normalizeExecutableSql, parseSqlStatements, resolveSqlSelection } from "./sql-statements.js";
 
 run("parse two SELECT statements separated by semicolon", () => {
   const sql = "select * from dual;\nselect sysdate from dual;";
@@ -110,6 +110,26 @@ run("keep anonymous PL/SQL block with internal semicolons as one statement", () 
   assert.equal(statements.length, 2);
   assert.match(statements[0]?.text ?? "", /^\s*begin\b/i);
   assert.match(statements[0]?.text ?? "", /\bnull;/i);
+  assert.match(statements[0]?.text ?? "", /\bend;\s*$/i);
+});
+
+run("normalize executable SQL strips trailing semicolon from a plain SQL statement", () => {
+  const sql = "select * from dual;";
+
+  assert.equal(normalizeExecutableSql(sql), "select * from dual");
+});
+
+run("normalize executable SQL strips SQL*Plus slash delimiter but keeps END semicolon", () => {
+  const sql = `
+    begin
+      dbms_output.put_line('ok');
+    end;
+    /
+  `;
+
+  assert.match(normalizeExecutableSql(sql), /^\s*begin\b/i);
+  assert.match(normalizeExecutableSql(sql), /\bend;\s*$/i);
+  assert.doesNotMatch(normalizeExecutableSql(sql), /\/\s*$/);
 });
 
 function run(name: string, fn: () => void): void {

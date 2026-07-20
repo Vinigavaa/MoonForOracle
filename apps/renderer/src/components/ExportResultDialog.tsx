@@ -53,7 +53,7 @@ export function ExportResultDialog({
               <input
                 value={delimiter}
                 maxLength={1}
-                onChange={(event) => setDelimiter(event.target.value || ";")}
+                onChange={(event) => setDelimiter(event.target.value)}
                 disabled={inProgress}
                 style={inputStyle}
               />

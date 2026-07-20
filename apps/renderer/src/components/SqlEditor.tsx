@@ -10,7 +10,6 @@ interface SqlEditorProps {
   activeConnectionId?: string | null;
   hasPendingTransaction?: boolean;
   executeTriggerRef: React.MutableRefObject<(() => void) | null>;
-  executeAllTriggerRef: React.MutableRefObject<(() => void) | null>;
 }
 
 export interface SqlEditorHandle {
@@ -27,7 +26,6 @@ export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(function Sq
     activeConnectionId = null,
     hasPendingTransaction = false,
     executeTriggerRef,
-    executeAllTriggerRef,
   },
   ref,
 ) {
@@ -38,7 +36,6 @@ export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(function Sq
       activeConnectionId={activeConnectionId}
       hasPendingTransaction={hasPendingTransaction}
       executeTriggerRef={executeTriggerRef}
-      executeAllTriggerRef={executeAllTriggerRef}
     />
   );
 });

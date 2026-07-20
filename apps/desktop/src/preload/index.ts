@@ -21,6 +21,12 @@ import type {
   WorkspaceMoveItemRequest,
   WorkspaceReadFileRequest,
   WorkspaceRenameItemRequest,
+  ThemeSaveRequest,
+  ThemeRenameRequest,
+  ThemeDeleteRequest,
+  ThemeDuplicateRequest,
+  ThemeSetDefaultRequest,
+  ThemeExportRequest,
 } from "@gavadb/types";
 
 contextBridge.exposeInMainWorld("gavadb", {
@@ -50,6 +56,33 @@ contextBridge.exposeInMainWorld("gavadb", {
 
   workspaceReadFile: (request: WorkspaceReadFileRequest) =>
     ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_READ_FILE, request),
+
+  themeList: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.THEME_LIST),
+
+  themeCreate: (request: ThemeSaveRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.THEME_CREATE, request),
+
+  themeRename: (request: ThemeRenameRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.THEME_RENAME, request),
+
+  themeDelete: (request: ThemeDeleteRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.THEME_DELETE, request),
+
+  themeDuplicate: (request: ThemeDuplicateRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.THEME_DUPLICATE, request),
+
+  themeSetDefault: (request: ThemeSetDefaultRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.THEME_SET_DEFAULT, request),
+
+  themeOpenFolder: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.THEME_OPEN_FOLDER),
+
+  themeImportFile: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.THEME_IMPORT_FILE),
+
+  themeExportFile: (request: ThemeExportRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.THEME_EXPORT_FILE, request),
 
   dbConnect: (config: ConnectionConfig) =>
     ipcRenderer.invoke(IPC_CHANNELS.DB_CONNECT, config),

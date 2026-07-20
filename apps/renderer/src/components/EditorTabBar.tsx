@@ -44,6 +44,17 @@ export function EditorTabBar({
               title={tab.title ?? tab.label}
               draggable={tab.draggable}
               onClick={() => onTabSelect(tab.id)}
+              onMouseDown={(event) => {
+                if (event.button === 1) {
+                  event.preventDefault();
+                }
+              }}
+              onAuxClick={(event) => {
+                if (event.button === 1 && tab.closable && onTabClose) {
+                  event.preventDefault();
+                  onTabClose(tab.id);
+                }
+              }}
               onDragStart={tab.onDragStart}
               onDragEnd={tab.onDragEnd}
               style={{

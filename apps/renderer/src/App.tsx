@@ -49,7 +49,6 @@ export function App() {
   const [updaterStatus, setUpdaterStatus] = useState<UpdaterStatus | null>(null);
   const dismissedUpdateVersionRef = useRef<string | null>(null);
   const executeTriggerRef = useRef<(() => void) | null>(null);
-  const executeAllTriggerRef = useRef<(() => void) | null>(null);
   const sqlEditorRef = useRef<SqlEditorHandle | null>(null);
 
   useEffect(() => {
@@ -285,14 +284,6 @@ export function App() {
     executeTriggerRef.current?.();
   }, [isConnected, toast]);
 
-  const handleExecuteAllSql = useCallback(() => {
-    if (!isConnected) {
-      toast.warning("Connect to a database first");
-      return;
-    }
-    executeAllTriggerRef.current?.();
-  }, [isConnected, toast]);
-
   const handleObjectSelect = useCallback((type: DatabaseObjectType, name: string) => {
     sqlEditorRef.current?.openObject(type, name);
   }, []);
@@ -322,7 +313,6 @@ export function App() {
         onCommit={handleCommit}
         onRollback={handleRollback}
         onExecuteSql={handleExecuteSql}
-        onExecuteAllSql={handleExecuteAllSql}
         onOpenPreferences={openPreferences}
       />
 
@@ -350,7 +340,6 @@ export function App() {
               activeConnectionId={activeConnectionId}
               hasPendingTransaction={transactionState.hasPendingChanges}
               executeTriggerRef={executeTriggerRef}
-              executeAllTriggerRef={executeAllTriggerRef}
             />
           </div>
         </div>

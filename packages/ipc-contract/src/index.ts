@@ -39,6 +39,13 @@ import type {
   WorkspaceReadFileResponse,
   WorkspaceRenameItemRequest,
   WorkspaceTree,
+  ThemeListResponse,
+  ThemeSaveRequest,
+  ThemeRenameRequest,
+  ThemeDeleteRequest,
+  ThemeDuplicateRequest,
+  ThemeSetDefaultRequest,
+  ThemeExportRequest,
 } from "@gavadb/types";
 
 /** Canais que o renderer pode invocar no main process (ipcRenderer.invoke) */
@@ -52,6 +59,15 @@ export interface IpcMainHandlers {
   "workspace:move-item": (request: WorkspaceMoveItemRequest) => Promise<IpcResult<WorkspaceOperationResult>>;
   "workspace:delete-item": (request: WorkspaceDeleteItemRequest) => Promise<IpcResult<WorkspaceOperationResult>>;
   "workspace:read-file": (request: WorkspaceReadFileRequest) => Promise<IpcResult<WorkspaceReadFileResponse>>;
+  "theme:list": () => Promise<IpcResult<ThemeListResponse>>;
+  "theme:create": (request: ThemeSaveRequest) => Promise<IpcResult<ThemeListResponse>>;
+  "theme:rename": (request: ThemeRenameRequest) => Promise<IpcResult<ThemeListResponse>>;
+  "theme:delete": (request: ThemeDeleteRequest) => Promise<IpcResult<ThemeListResponse>>;
+  "theme:duplicate": (request: ThemeDuplicateRequest) => Promise<IpcResult<ThemeListResponse>>;
+  "theme:set-default": (request: ThemeSetDefaultRequest) => Promise<IpcResult<ThemeListResponse>>;
+  "theme:open-folder": () => Promise<IpcResult<void>>;
+  "theme:import-file": () => Promise<IpcResult<ThemeListResponse | null>>;
+  "theme:export-file": (request: ThemeExportRequest) => Promise<IpcResult<string | null>>;
   "db:connect": (config: ConnectionConfig) => Promise<IpcResult<void>>;
   "db:disconnect": () => Promise<IpcResult<void>>;
   "db:execute-query": (request: SqlExecutionRequest) => Promise<IpcResult<SqlExecutionResponse>>;
@@ -127,6 +143,15 @@ export const IPC_CHANNELS = {
   WORKSPACE_MOVE_ITEM: "workspace:move-item",
   WORKSPACE_DELETE_ITEM: "workspace:delete-item",
   WORKSPACE_READ_FILE: "workspace:read-file",
+  THEME_LIST: "theme:list",
+  THEME_CREATE: "theme:create",
+  THEME_RENAME: "theme:rename",
+  THEME_DELETE: "theme:delete",
+  THEME_DUPLICATE: "theme:duplicate",
+  THEME_SET_DEFAULT: "theme:set-default",
+  THEME_OPEN_FOLDER: "theme:open-folder",
+  THEME_IMPORT_FILE: "theme:import-file",
+  THEME_EXPORT_FILE: "theme:export-file",
   DB_CONNECT: "db:connect",
   DB_DISCONNECT: "db:disconnect",
   DB_EXECUTE_QUERY: "db:execute-query",
@@ -179,6 +204,15 @@ export interface GavaDbApi {
   workspaceMoveItem: (request: WorkspaceMoveItemRequest) => Promise<IpcResult<WorkspaceOperationResult>>;
   workspaceDeleteItem: (request: WorkspaceDeleteItemRequest) => Promise<IpcResult<WorkspaceOperationResult>>;
   workspaceReadFile: (request: WorkspaceReadFileRequest) => Promise<IpcResult<WorkspaceReadFileResponse>>;
+  themeList: () => Promise<IpcResult<ThemeListResponse>>;
+  themeCreate: (request: ThemeSaveRequest) => Promise<IpcResult<ThemeListResponse>>;
+  themeRename: (request: ThemeRenameRequest) => Promise<IpcResult<ThemeListResponse>>;
+  themeDelete: (request: ThemeDeleteRequest) => Promise<IpcResult<ThemeListResponse>>;
+  themeDuplicate: (request: ThemeDuplicateRequest) => Promise<IpcResult<ThemeListResponse>>;
+  themeSetDefault: (request: ThemeSetDefaultRequest) => Promise<IpcResult<ThemeListResponse>>;
+  themeOpenFolder: () => Promise<IpcResult<void>>;
+  themeImportFile: () => Promise<IpcResult<ThemeListResponse | null>>;
+  themeExportFile: (request: ThemeExportRequest) => Promise<IpcResult<string | null>>;
   dbConnect: (config: ConnectionConfig) => Promise<IpcResult<void>>;
   dbDisconnect: () => Promise<IpcResult<void>>;
   dbExecuteQuery: (request: SqlExecutionRequest) => Promise<IpcResult<SqlExecutionResponse>>;

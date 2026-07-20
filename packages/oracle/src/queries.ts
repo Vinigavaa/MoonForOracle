@@ -1,6 +1,15 @@
 import type { DatabaseObjectType, DbObjectType, OracleObjectKind } from "@gavadb/types";
 
 /**
+ * Escapa um valor para uso seguro dentro de um literal string SQL ('...').
+ * Dobra aspas simples (padrão Oracle) para impedir que um nome de objeto
+ * malicioso (ou legítimo com apóstrofo) quebre o literal e injete SQL.
+ */
+function escapeSqlLiteral(value: string): string {
+  return value.replace(/'/g, "''");
+}
+
+/**
  * SQL para listar objetos do schema atual, filtrado por tipo.
  * Usa ALL_OBJECTS para ver objetos acessíveis pelo usuário conectado.
  */
@@ -43,7 +52,7 @@ export function getSourceCodeSql(type: DatabaseObjectType, name: string): string
     SELECT line, text
     FROM all_source
     WHERE type = '${oracleType}'
-      AND name = '${name}'
+      AND name = '${escapeSqlLiteral(name)}'
       AND owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
     ORDER BY line
   `;
@@ -62,7 +71,7 @@ export function getTableColumnsSql(name: string): string {
       data_default,
       column_id
     FROM all_tab_columns
-    WHERE table_name = '${name}'
+    WHERE table_name = '${escapeSqlLiteral(name)}'
       AND owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
     ORDER BY column_id
   `;
@@ -80,7 +89,7 @@ export function getViewColumnsSql(name: string): string {
       nullable,
       column_id
     FROM all_tab_columns
-    WHERE table_name = '${name}'
+    WHERE table_name = '${escapeSqlLiteral(name)}'
       AND owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
     ORDER BY column_id
   `;
@@ -91,7 +100,7 @@ export function getPackageSourceSql(name: string): string {
   return `
     SELECT type, line, text
     FROM all_source
-    WHERE name = '${name}'
+    WHERE name = '${escapeSqlLiteral(name)}'
       AND owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
       AND type IN ('PACKAGE', 'PACKAGE BODY')
     ORDER BY DECODE(type, 'PACKAGE', 1, 'PACKAGE BODY', 2), line
@@ -105,7 +114,7 @@ export function getCompilerErrorsSql(objectName: string, objectType: DbObjectTyp
       position,
       text
     FROM user_errors
-    WHERE name = '${objectName}'
+    WHERE name = '${escapeSqlLiteral(objectName)}'
       AND type = '${dbObjectTypeToOracleSourceType(objectType)}'
     ORDER BY sequence
   `;
@@ -126,7 +135,7 @@ export function getCheckConstraintSql(name: string): string {
       ON cols.owner = cons.owner
      AND cols.constraint_name = cons.constraint_name
     WHERE cons.constraint_type = 'C'
-      AND cons.constraint_name = '${name}'
+      AND cons.constraint_name = '${escapeSqlLiteral(name)}'
       AND cons.owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
     ORDER BY cols.position NULLS LAST
   `;
@@ -134,14 +143,14 @@ export function getCheckConstraintSql(name: string): string {
 
 export function getTableDdlSql(name: string): string {
   return `
-    SELECT DBMS_METADATA.GET_DDL('TABLE', '${name}', SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')) AS DDL
+    SELECT DBMS_METADATA.GET_DDL('TABLE', '${escapeSqlLiteral(name)}', SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')) AS DDL
     FROM dual
   `;
 }
 
 export function getViewDdlSql(name: string): string {
   return `
-    SELECT DBMS_METADATA.GET_DDL('VIEW', '${name}', SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')) AS DDL
+    SELECT DBMS_METADATA.GET_DDL('VIEW', '${escapeSqlLiteral(name)}', SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')) AS DDL
     FROM dual
   `;
 }

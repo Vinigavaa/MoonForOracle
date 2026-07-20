@@ -145,6 +145,7 @@ export function ThemePreferencesPanel({ onClose }: ThemePreferencesPanelProps) {
     savedThemes,
     userDefaultThemeId,
     activeSavedThemeId,
+    themesFolderPath,
     updateTheme,
     resetTheme,
     saveCurrentThemeAsPreset,
@@ -153,6 +154,9 @@ export function ThemePreferencesPanel({ onClose }: ThemePreferencesPanelProps) {
     deleteSavedTheme,
     duplicateSavedTheme,
     setUserDefaultTheme,
+    openThemesFolder,
+    importThemeFile,
+    exportThemeFile,
   } = useEditorTheme();
   const toast = useToastContext();
   const contrastWarning = useMemo(() => getContrastWarning(theme), [theme]);
@@ -182,8 +186,8 @@ export function ThemePreferencesPanel({ onClose }: ThemePreferencesPanelProps) {
     updateTheme({ fontSize: Math.max(9, Math.min(24, value)) });
   }, [updateTheme]);
 
-  const handleSaveTheme = useCallback(() => {
-    const preset = saveCurrentThemeAsPreset(newThemeName);
+  const handleSaveTheme = useCallback(async () => {
+    const preset = await saveCurrentThemeAsPreset(newThemeName);
     if (!preset) {
       toast.warning("Informe um nome para salvar este tema.");
       return;
@@ -193,10 +197,10 @@ export function ThemePreferencesPanel({ onClose }: ThemePreferencesPanelProps) {
     toast.success(`Tema "${preset.name}" salvo.`);
   }, [newThemeName, saveCurrentThemeAsPreset, toast]);
 
-  const handleApplyTheme = useCallback((id: string) => {
+  const handleApplyTheme = useCallback(async (id: string) => {
     const preset = savedThemes.find((item) => item.id === id);
     if (!preset) return;
-    if (applySavedTheme(id)) {
+    if (await applySavedTheme(id)) {
       setSelectedThemeId(id);
       toast.success(`Tema "${preset.name}" aplicado.`);
     }
@@ -208,41 +212,41 @@ export function ThemePreferencesPanel({ onClose }: ThemePreferencesPanelProps) {
     setSelectedThemeId(id);
   }, []);
 
-  const handleRenameTheme = useCallback((id: string) => {
-    if (!renameSavedTheme(id, renameValue)) {
+  const handleRenameTheme = useCallback(async (id: string) => {
+    const nextName = renameValue.trim();
+    if (!(await renameSavedTheme(id, renameValue))) {
       toast.warning("Informe um nome válido para o tema.");
       return;
     }
-    const nextName = renameValue.trim();
     setRenamingThemeId(null);
     setRenameValue("");
     toast.success(`Tema renomeado para "${nextName}".`);
   }, [renameSavedTheme, renameValue, toast]);
 
-  const handleDeleteTheme = useCallback((id: string) => {
+  const handleDeleteTheme = useCallback(async (id: string) => {
     const preset = savedThemes.find((item) => item.id === id);
     if (!preset) return;
     if (activeSavedThemeId === id) {
-      toast.warning("N�o � poss�vel deletar o tema atualmente em uso. Aplique outro tema primeiro.");
+      toast.warning("Não é possível deletar o tema atualmente em uso. Aplique outro tema primeiro.");
       return;
     }
-    if (deleteSavedTheme(id)) {
+    if (await deleteSavedTheme(id)) {
       setPendingDeleteThemeId(null);
-      toast.info(`Tema "${preset.name}" exclu�do.`);
+      toast.info(`Tema "${preset.name}" excluído.`);
       return;
     }
-    toast.warning("N�o foi poss�vel excluir este tema.");
+    toast.warning("Não foi possível excluir este tema.");
   }, [activeSavedThemeId, deleteSavedTheme, savedThemes, toast]);
 
-  const handleDuplicateTheme = useCallback((id: string) => {
-    const preset = duplicateSavedTheme(id);
+  const handleDuplicateTheme = useCallback(async (id: string) => {
+    const preset = await duplicateSavedTheme(id);
     if (!preset) return;
     setSelectedThemeId(preset.id);
     toast.success(`Tema "${preset.name}" criado.`);
   }, [duplicateSavedTheme, toast]);
 
-  const handleSetDefaultTheme = useCallback((id: string | null) => {
-    if (!setUserDefaultTheme(id)) return;
+  const handleSetDefaultTheme = useCallback(async (id: string | null) => {
+    if (!(await setUserDefaultTheme(id))) return;
     if (id) {
       const preset = savedThemes.find((item) => item.id === id);
       toast.success(`"${preset?.name ?? "Tema"}" agora é o padrão de inicialização.`);
@@ -250,6 +254,26 @@ export function ThemePreferencesPanel({ onClose }: ThemePreferencesPanelProps) {
     }
     toast.info("O tema padrão do app foi restaurado como padrão de inicialização.");
   }, [savedThemes, setUserDefaultTheme, toast]);
+
+  const handleOpenThemesFolder = useCallback(async () => {
+    if (!(await openThemesFolder())) {
+      toast.warning("Não foi possível abrir a pasta de temas.");
+    }
+  }, [openThemesFolder, toast]);
+
+  const handleImportTheme = useCallback(async () => {
+    const preset = await importThemeFile();
+    if (!preset) return;
+    setSelectedThemeId(preset.id);
+    toast.success(`Tema "${preset.name}" importado.`);
+  }, [importThemeFile, toast]);
+
+  const handleExportTheme = useCallback(async (id: string) => {
+    const preset = savedThemes.find((item) => item.id === id);
+    const destPath = await exportThemeFile(id);
+    if (!destPath) return;
+    toast.success(`Tema "${preset?.name ?? "Tema"}" exportado.`);
+  }, [exportThemeFile, savedThemes, toast]);
 
   const selectedTheme = savedThemes.find((item) => item.id === selectedThemeId) ?? null;
 
@@ -277,6 +301,17 @@ export function ThemePreferencesPanel({ onClose }: ThemePreferencesPanelProps) {
 
         <section style={sectionStyle}>
           <div style={sectionTitleStyle}>Temas Salvos</div>
+          <div style={presetMetaRowStyle}>
+            <span style={helperTextStyle} title={themesFolderPath}>
+              {themesFolderPath ? `Pasta: ${themesFolderPath}` : "Carregando pasta de temas..."}
+            </span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={handleImportTheme} style={secondaryActionButtonStyle}>Importar Tema (.json)</button>
+              <button onClick={handleOpenThemesFolder} disabled={!themesFolderPath} style={secondaryActionButtonStyle}>
+                Abrir Pasta
+              </button>
+            </div>
+          </div>
           <div style={presetComposerStyle}>
             <input
               value={newThemeName}
@@ -308,7 +343,7 @@ export function ThemePreferencesPanel({ onClose }: ThemePreferencesPanelProps) {
                 const isRenaming = renamingThemeId === preset.id;
                 const isPendingDelete = pendingDeleteThemeId === preset.id;
                 const deleteDisabledReason = isApplied
-                  ? "N�o � poss�vel deletar o tema atualmente em uso. Aplique outro tema primeiro."
+                  ? "Não é possível deletar o tema atualmente em uso. Aplique outro tema primeiro."
                   : "Excluir tema";
                 return (
                   <article
@@ -369,6 +404,7 @@ export function ThemePreferencesPanel({ onClose }: ThemePreferencesPanelProps) {
                         </button>
                       )}
                       <button onClick={() => handleDuplicateTheme(preset.id)} style={secondaryActionButtonStyle}>Duplicar</button>
+                      <button onClick={() => handleExportTheme(preset.id)} style={secondaryActionButtonStyle}>Exportar</button>
                       <button onClick={() => handleSetDefaultTheme(preset.id)} disabled={isDefault} style={secondaryActionButtonStyle}>
                         Definir como Padrão
                       </button>

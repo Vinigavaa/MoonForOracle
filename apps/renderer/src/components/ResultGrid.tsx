@@ -1,5 +1,5 @@
 import { memo, useRef, useState, useEffect, useCallback, useMemo } from "react";
-import { EyeOff } from "lucide-react";
+import { Check, X } from "lucide-react";
 import type { BindParameterValue, QueryExportColumn, QueryResultColumn, QueryResultRow, SqlExecutionResponse, UpdateRowRequest } from "@gavadb/types";
 import { formatDuration } from "@gavadb/utils";
 import { countRender } from "../lib/perfLog";
@@ -111,6 +111,7 @@ export const ResultGrid = memo(function ResultGrid({
   const [totalRowCount, setTotalRowCount] = useState<number | null>(null);
   const [countError, setCountError] = useState<string | null>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [gridContextMenu, setGridContextMenu] = useState<{ x: number; y: number } | null>(null);
   const { exportResult, exportInProgress, exportProgress, clearExportProgress } = useResultExport();
   const toast = useToastContext();
   const lastExportStageRef = useRef<string | null>(null);
@@ -148,6 +149,22 @@ export const ResultGrid = memo(function ResultGrid({
 
   const onScroll = useCallback(() => {
     if (scrollRef.current) setScrollTop(scrollRef.current.scrollTop);
+  }, []);
+
+  useEffect(() => {
+    if (!gridContextMenu) return undefined;
+    const close = () => setGridContextMenu(null);
+    document.addEventListener("mousedown", close);
+    window.addEventListener("blur", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      window.removeEventListener("blur", close);
+    };
+  }, [gridContextMenu]);
+
+  const handleGridContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setGridContextMenu({ x: e.clientX, y: e.clientY });
   }, []);
 
   countRender("ResultGrid");
@@ -316,6 +333,17 @@ export const ResultGrid = memo(function ResultGrid({
     }
   }, [clearExportProgress, exportQuery, exportResult]);
 
+  const handleCopyForAi = useCallback(async () => {
+    if (columns.length === 0 || rows.length === 0) return;
+    const text = formatRowsForAi(columns, rows);
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${rows.length} linha(s) copiada(s) para a área de transferência.`);
+    } catch {
+      toast.error("Não foi possível copiar para a área de transferência.");
+    }
+  }, [columns, rows, toast]);
+
   // ─── Keyboard navigation ─────────────────────────────────────────
 
   const focusGrid = useCallback(() => {
@@ -463,34 +491,32 @@ export const ResultGrid = memo(function ResultGrid({
       tabIndex={0}
     >
       <div style={toolbarStyle}>
-        <button onClick={handleSaveChanges} disabled={!canEditRows || pendingRowIndexes.length === 0 || !!mutating} style={primaryButtonStyle}>
-          Apply Changes
-        </button>
-        <button onClick={cancelPendingChanges} disabled={pendingRowIndexes.length === 0 || !!mutating} style={secondaryButtonStyle}>
-          Discard Changes
-        </button>
-        {onCountRows && result.statementType === "select" && result.rowCount > 0 && (
-          <button onClick={handleCountRows} disabled={countingRows} style={secondaryButtonStyle}>
-            {countingRows ? "Counting..." : totalRowCount != null ? `Total: ${totalRowCount.toLocaleString()} rows` : "Count Rows"}
-          </button>
-        )}
         <button
-          onClick={() => setExportDialogOpen(true)}
-          disabled={!exportQuery?.sql || exportInProgress}
-          style={secondaryButtonStyle}
+          onClick={handleSaveChanges}
+          disabled={!canEditRows || pendingRowIndexes.length === 0 || !!mutating}
+          style={{ ...iconButtonStyle, background: "transparent", border: "none", color: pendingRowIndexes.length > 0 ? "var(--success)" : undefined }}
+          title="Apply Changes"
+          aria-label="Apply Changes"
         >
-          {exportInProgress ? "Exporting..." : "Export"}
+          <Check size={14} strokeWidth={1.8} />
         </button>
-        {onHide && (
-          <button type="button" onClick={onHide} style={iconButtonStyle} title="Hide results" aria-label="Hide results">
-            <EyeOff size={14} strokeWidth={1.8} />
-          </button>
+        <button
+          onClick={cancelPendingChanges}
+          disabled={pendingRowIndexes.length === 0 || !!mutating}
+          style={{ ...iconButtonStyle, background: "transparent", border: "none", color: pendingRowIndexes.length > 0 ? "var(--danger)" : undefined }}
+          title="Discard Changes"
+          aria-label="Discard Changes"
+        >
+          <X size={14} strokeWidth={1.8} />
+        </button>
+        {totalRowCount != null && (
+          <span style={toolbarInfoStyle}>Total: {totalRowCount.toLocaleString()} rows</span>
         )}
         {countError && <span style={countErrorStyle}>{countError}</span>}
         <span style={toolbarInfoStyle}>
           {canEditRows
             ? pendingRowIndexes.length > 0
-              ? `${pendingRowIndexes.length} row(s) modified — use Commit to persist`
+              ? `${pendingRowIndexes.length} row(s) modified`
               : " "
             : editableInfo?.reason ?? "Read-only result"
           }
@@ -498,7 +524,7 @@ export const ResultGrid = memo(function ResultGrid({
         {(mutating || sorting) && <span style={loadingStyle}>{sorting ? "Sorting..." : "Applying changes..."}</span>}
       </div>
 
-      <div ref={scrollRef} onScroll={onScroll} style={{ flex: 1, overflow: "auto", background: "var(--grid-bg)" }}>
+      <div ref={scrollRef} onScroll={onScroll} onContextMenu={handleGridContextMenu} style={{ flex: 1, overflow: "auto", background: "var(--grid-bg)" }}>
         <table ref={tableRef} style={tableStyle}>
           <thead>
             <tr style={{ height: headerHeight }}>
@@ -621,6 +647,50 @@ export const ResultGrid = memo(function ResultGrid({
         {!result.hasMore && result.rowCount > 0 && <span style={mutedItalicStyle}>All rows loaded</span>}
       </div>
 
+      {gridContextMenu && (
+        <div
+          style={{ ...gridContextMenuStyle, left: gridContextMenu.x, top: gridContextMenu.y }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          {onCountRows && result.statementType === "select" && result.rowCount > 0 && (
+            <GridContextMenuButton
+              label={countingRows ? "Counting..." : "Count Rows"}
+              disabled={countingRows}
+              onClick={() => {
+                setGridContextMenu(null);
+                void handleCountRows();
+              }}
+            />
+          )}
+          <GridContextMenuButton
+            label={exportInProgress ? "Exporting..." : "Export..."}
+            disabled={!exportQuery?.sql || exportInProgress}
+            onClick={() => {
+              setGridContextMenu(null);
+              setExportDialogOpen(true);
+            }}
+          />
+          <GridContextMenuButton
+            label="Copy for AI"
+            disabled={rows.length === 0}
+            onClick={() => {
+              setGridContextMenu(null);
+              void handleCopyForAi();
+            }}
+          />
+          {onHide && (
+            <GridContextMenuButton
+              label="Hide Results"
+              onClick={() => {
+                setGridContextMenu(null);
+                onHide();
+              }}
+            />
+          )}
+        </div>
+      )}
+
       <ExportResultDialog
         open={exportDialogOpen}
         inProgress={exportInProgress}
@@ -639,6 +709,27 @@ export const ResultGrid = memo(function ResultGrid({
 });
 
 // ─── Helpers ────────────────────────────────────────────────────────
+
+/** Markdown table with a column/type header — compact and easy for an LLM to parse. */
+function formatRowsForAi(columns: QueryResultColumn[], rows: QueryResultRow[]): string {
+  const columnsLine = `Columns: ${columns.map((col) => `${col.name} (${col.dataType})`).join(", ")}`;
+  const header = `| ${columns.map((col) => col.name).join(" | ")} |`;
+  const separator = `| ${columns.map(() => "---").join(" | ")} |`;
+  const body = rows.map((row) => {
+    const cells = columns.map((col) => {
+      const value = row[col.name];
+      const display = value == null ? "NULL" : formatCellDisplay(value, col);
+      return escapeMarkdownCell(display);
+    });
+    return `| ${cells.join(" | ")} |`;
+  });
+
+  return [columnsLine, "", header, separator, ...body].join("\n");
+}
+
+function escapeMarkdownCell(value: string): string {
+  return value.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+}
 
 function formatEditableCellValue(value: unknown): string {
   if (value == null) return "";
@@ -670,6 +761,14 @@ function isEditableCellValue(value: unknown): boolean {
   return value == null || typeof value === "string" || typeof value === "number" || typeof value === "boolean";
 }
 
+function GridContextMenuButton({ label, disabled, onClick }: { label: string; disabled?: boolean; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} style={gridContextButtonStyle}>
+      {label}
+    </button>
+  );
+}
+
 // ─── Styles ─────────────────────────────────────────────────────────
 
 const emptyStateStyle: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--text-muted)", fontSize: "var(--font-size-sm)" };
@@ -679,8 +778,6 @@ const toolbarInfoStyle: React.CSSProperties = { fontSize: 11, color: "var(--text
 const loadingStyle: React.CSSProperties = { fontSize: 11, color: "var(--accent)", animation: "pulse 1s infinite", marginLeft: "auto" };
 const statusBarStyle: React.CSSProperties = { padding: "4px 12px", fontSize: 11, color: "var(--text-muted)", borderTop: "1px solid var(--border-color)", background: "var(--panel-bg)", flexShrink: 0, display: "flex", alignItems: "center", gap: 12 };
 const mutedItalicStyle: React.CSSProperties = { color: "var(--text-muted)", fontStyle: "italic" };
-const primaryButtonStyle: React.CSSProperties = { padding: "3px 10px", fontSize: 11, background: "var(--button-primary-bg)", color: "var(--button-primary-text)", border: "none", borderRadius: "var(--radius)", fontWeight: 600 };
-const secondaryButtonStyle: React.CSSProperties = { padding: "3px 10px", fontSize: 11, background: "var(--button-secondary-bg)", border: "1px solid var(--border-color)", borderRadius: "var(--radius)", color: "var(--button-secondary-text)" };
 const iconButtonStyle: React.CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
@@ -708,3 +805,22 @@ const editingCellStyle: React.CSSProperties = { outline: "2px solid var(--focus-
 const inputStyle: React.CSSProperties = { width: "100%", height: INPUT_HEIGHT, padding: "0 6px", background: "var(--grid-bg)", border: "1px solid var(--focus-color)", borderRadius: 4, color: "var(--text-primary)", fontFamily: "var(--font-mono)", fontSize: "var(--font-size-sm)", outline: "none" };
 const nullCellStyle: React.CSSProperties = { color: "var(--text-muted)", fontStyle: "italic" };
 const countErrorStyle: React.CSSProperties = { color: "var(--danger)", fontSize: 11 };
+const gridContextMenuStyle: React.CSSProperties = {
+  position: "fixed",
+  zIndex: 200,
+  minWidth: 168,
+  padding: "4px 0",
+  background: "var(--popup-bg)",
+  border: "1px solid var(--border-color)",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.32)",
+};
+const gridContextButtonStyle: React.CSSProperties = {
+  width: "100%",
+  display: "block",
+  padding: "6px 12px",
+  background: "transparent",
+  border: "none",
+  borderRadius: 0,
+  textAlign: "left",
+  fontSize: 12,
+};

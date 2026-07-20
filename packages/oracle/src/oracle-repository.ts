@@ -33,6 +33,7 @@ import type {
 } from "@gavadb/types";
 import { normalizeOracleError } from "./error-normalizer";
 import { buildOracleBinds, inferBindMetadata } from "./bind-inference";
+import { normalizeExecutableSql } from "@gavadb/utils";
 import {
   listObjectsSql,
   getSourceCodeSql,
@@ -56,7 +57,6 @@ import {
 const DEFAULT_PAGE_SIZE = 200;
 const MAX_PAGE_SIZE = 500;
 const CONNECT_TIMEOUT_MS = 15_000;
-const DBMS_OUTPUT_FETCH_CHUNK_SIZE = 100;
 const DBMS_OUTPUT_LINE_MAX_SIZE = 32_767;
 
 /**
@@ -213,9 +213,10 @@ export class OracleRepository implements DatabaseRepository {
 
   async executeQuery(request: SqlExecutionRequest): Promise<SqlExecutionResponse> {
     const conn = this.requireConnection();
+    const sql = normalizeExecutableSql(request.sql);
     const pageSize = clampPageSize(request.pageSize);
-    const offset = request.offset ?? 0;
-    const stmtType = detectStatementType(request.sql);
+    const offset = clampOffset(request.offset);
+    const stmtType = detectStatementType(sql);
     const isSelect = stmtType === "select";
     const start = performance.now();
     const binds = buildOracleBinds(request.binds);
@@ -224,13 +225,13 @@ export class OracleRepository implements DatabaseRepository {
 
     try {
       if (isSelect) {
-        const result = await this.executeSelect(conn, request.sql, pageSize, offset, start, request.orderBy, binds);
+        const result = await this.executeSelect(conn, sql, pageSize, offset, start, request.orderBy, binds);
         const dbmsOutput = await this.consumeDbmsOutput(conn);
         return { ...result, dbmsOutput };
       }
 
       const result = await conn.execute(
-        request.sql,
+        sql,
         binds,
         { outFormat: oracledb.OUT_FORMAT_OBJECT, autoCommit: false },
       );
@@ -398,7 +399,7 @@ export class OracleRepository implements DatabaseRepository {
   async inferBinds(sql: string): Promise<BindMetadata[]> {
     const conn = this.requireConnection();
     try {
-      return await inferBindMetadata(conn, sql);
+      return await inferBindMetadata(conn, normalizeExecutableSql(sql));
     } catch (err) {
       throw normalizeOracleError(err);
     }
@@ -409,7 +410,7 @@ export class OracleRepository implements DatabaseRepository {
     binds?: Record<string, import("@gavadb/types").BindParameterValue>,
   ): Promise<{ totalRows: number; executionTimeMs: number }> {
     const conn = this.requireConnection();
-    const cleanSql = sql.replace(/;\s*$/, "").trim();
+    const cleanSql = normalizeExecutableSql(sql);
     const countSql = `SELECT COUNT(*) AS CNT FROM (${cleanSql})`;
     const start = performance.now();
 
@@ -693,37 +694,33 @@ export class OracleRepository implements DatabaseRepository {
         const result = await conn.execute(
           `
             BEGIN
-              DBMS_OUTPUT.GET_LINES(:lines, :numLines);
+              DBMS_OUTPUT.GET_LINE(:line, :status);
             END;
           `,
           {
-            lines: {
+            line: {
               dir: oracledb.BIND_OUT,
               type: oracledb.STRING,
-              maxArraySize: DBMS_OUTPUT_FETCH_CHUNK_SIZE,
               maxSize: DBMS_OUTPUT_LINE_MAX_SIZE,
             },
-            numLines: {
-              dir: oracledb.BIND_INOUT,
+            status: {
+              dir: oracledb.BIND_OUT,
               type: oracledb.NUMBER,
-              val: DBMS_OUTPUT_FETCH_CHUNK_SIZE,
             },
           },
           { autoCommit: false },
         );
 
         const outBinds = result.outBinds as {
-          lines?: string[] | null;
-          numLines?: number | null;
+          line?: string | null;
+          status?: number | null;
         };
 
-        const fetchedCount = Math.max(0, Math.trunc(outBinds.numLines ?? 0));
-        const fetchedLines = (outBinds.lines ?? []).slice(0, fetchedCount);
-        lines.push(...fetchedLines.map((line) => ({ line: line ?? "" })));
-
-        if (fetchedCount < DBMS_OUTPUT_FETCH_CHUNK_SIZE) {
+        if ((outBinds.status ?? 1) !== 0) {
           return lines;
         }
+
+        lines.push({ line: outBinds.line ?? "" });
       }
     } catch (err) {
       console.warn("[Oracle] Failed to consume DBMS_OUTPUT:", (err as Error).message);
@@ -1264,6 +1261,16 @@ function buildEqualityClause(columnName: string, bindName: string, value: unknow
 function clampPageSize(pageSize?: number): number {
   if (!pageSize || !Number.isFinite(pageSize)) return DEFAULT_PAGE_SIZE;
   return Math.max(1, Math.min(Math.floor(pageSize), MAX_PAGE_SIZE));
+}
+
+/**
+ * `offset` é concatenado direto no SQL de paginação (OFFSET n ROWS), então
+ * precisa ser um inteiro não-negativo — nunca confiar no tipo declarado do IPC.
+ */
+function clampOffset(offset?: number): number {
+  const n = Number(offset);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.floor(n);
 }
 
 function clampObjectSearchLimit(limit?: number): number {

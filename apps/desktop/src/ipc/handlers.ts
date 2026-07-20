@@ -1,4 +1,4 @@
-import { ipcMain, app, dialog, type BrowserWindow } from "electron";
+import { ipcMain, app, dialog, shell, type BrowserWindow } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 import { IPC_CHANNELS } from "@gavadb/ipc-contract";
@@ -19,11 +19,18 @@ import type {
   SaveConnectionRequest,
   SearchColumnsRequest,
   QueryExportRequest,
+  ThemeSaveRequest,
+  ThemeRenameRequest,
+  ThemeDeleteRequest,
+  ThemeDuplicateRequest,
+  ThemeSetDefaultRequest,
+  ThemeExportRequest,
 } from "@gavadb/types";
 import * as useCases from "../use-cases";
 import { SavedConnectionsStore } from "../lib/saved-connections-store";
 import { QueryExportService } from "../services/export/query-export-service";
 import { WorkspaceService } from "../services/workspace/workspace-service";
+import { ThemeService } from "../services/theme/theme-service";
 import {
   checkForUpdates,
   downloadUpdate,
@@ -137,6 +144,7 @@ function emitWindowMaximizedState(win: BrowserWindow): void {
 
 export function registerIpcHandlers(win: BrowserWindow): void {
   const workspaceService = new WorkspaceService(app.getPath("userData"), app.getPath("documents"));
+  const themeService = new ThemeService(app.getPath("userData"), app.getPath("documents"));
 
   win.on("maximize", () => emitWindowMaximizedState(win));
   win.on("unmaximize", () => emitWindowMaximizedState(win));
@@ -226,6 +234,104 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       return ok(await workspaceService.readFile(request));
     } catch (err) {
       return fail(logIpcError(IPC_CHANNELS.WORKSPACE_READ_FILE, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.THEME_LIST, async () => {
+    try {
+      return ok(await themeService.listThemes());
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.THEME_LIST, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.THEME_CREATE, async (_event, request: ThemeSaveRequest) => {
+    try {
+      return ok(await themeService.createTheme(request));
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.THEME_CREATE, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.THEME_RENAME, async (_event, request: ThemeRenameRequest) => {
+    try {
+      return ok(await themeService.renameTheme(request));
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.THEME_RENAME, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.THEME_DELETE, async (_event, request: ThemeDeleteRequest) => {
+    try {
+      return ok(await themeService.deleteTheme(request));
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.THEME_DELETE, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.THEME_DUPLICATE, async (_event, request: ThemeDuplicateRequest) => {
+    try {
+      return ok(await themeService.duplicateTheme(request));
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.THEME_DUPLICATE, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.THEME_SET_DEFAULT, async (_event, request: ThemeSetDefaultRequest) => {
+    try {
+      return ok(await themeService.setDefaultTheme(request));
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.THEME_SET_DEFAULT, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.THEME_OPEN_FOLDER, async () => {
+    try {
+      const folderPath = await themeService.ensureFolder();
+      const errorMessage = await shell.openPath(folderPath);
+      if (errorMessage) {
+        return fail({ code: "UNKNOWN", message: errorMessage });
+      }
+      return ok(undefined);
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.THEME_OPEN_FOLDER, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.THEME_IMPORT_FILE, async () => {
+    try {
+      const result = await dialog.showOpenDialog(win, {
+        title: "Import theme",
+        properties: ["openFile"],
+        filters: [{ name: "Theme", extensions: ["json"] }],
+      });
+
+      if (result.canceled || !result.filePaths[0]) {
+        return ok(null);
+      }
+
+      return ok(await themeService.importThemeFile(result.filePaths[0]));
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.THEME_IMPORT_FILE, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.THEME_EXPORT_FILE, async (_event, request: ThemeExportRequest) => {
+    try {
+      const result = await dialog.showSaveDialog(win, {
+        title: "Export theme",
+        defaultPath: request.fileName,
+        filters: [{ name: "Theme", extensions: ["json"] }],
+      });
+
+      if (result.canceled || !result.filePath) {
+        return ok(null);
+      }
+
+      await themeService.exportThemeFile(request.fileName, result.filePath);
+      return ok(result.filePath);
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.THEME_EXPORT_FILE, err));
     }
   });
 

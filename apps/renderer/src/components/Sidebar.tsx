@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Blocks, ChevronDown, DatabaseZap, FolderCode, Globe, Menu, Package, PackageSearch, Play, Table, type LucideIcon } from "lucide-react";
+import { Blocks, ChevronDown, DatabaseZap, FolderCode, Globe, Menu, Package, PackageSearch, Play, Plug, Table, type LucideIcon } from "lucide-react";
 import type { DatabaseObjectType, DatabaseObjectSummary, SavedConnection, WorkspaceReadFileResponse } from "@gavadb/types";
 import { useObjectList, type SectionState } from "../hooks/useObjectList";
 import { loadSidebarPreferences, saveSidebarPreferences } from "../lib/sidebarPreferences";
@@ -267,6 +267,10 @@ function SavedConnectionsSection({
               return (
                 <div key={conn.id} style={{ position: "relative" }}>
                   <div
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      setDetailsOpenId(isDetailsOpen ? null : conn.id);
+                    }}
                     style={{
                       display: "flex",
                       alignItems: "center",
@@ -307,19 +311,13 @@ function SavedConnectionsSection({
                       <button
                         onClick={() => onQuickConnect(conn.id)}
                         disabled={isThisConnecting}
-                        style={sidebarSmallBtnStyle}
-                        title="Connect"
+                        style={{ ...sidebarIconBtnStyle, opacity: isThisConnecting ? 0.5 : 1 }}
+                        title={isThisConnecting ? "Connecting..." : "Connect"}
+                        aria-label="Connect"
                       >
-                        {isThisConnecting ? "..." : "Connect"}
+                        <Plug size={13} strokeWidth={1.9} />
                       </button>
                     )}
-                    <button
-                      onClick={() => setDetailsOpenId(isDetailsOpen ? null : conn.id)}
-                      style={sidebarSmallBtnStyle}
-                      title="Details"
-                    >
-                      {"\u2026"}
-                    </button>
                   </div>
 
                   {/* Details popover */}
@@ -422,16 +420,18 @@ function CollapsibleSectionHeader({
   );
 }
 
-const sidebarSmallBtnStyle: React.CSSProperties = {
-  fontSize: 10,
-  padding: "1px 6px",
+const sidebarIconBtnStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 20,
+  height: 20,
+  padding: 0,
   background: "transparent",
-  border: "1px solid var(--border-color)",
-  borderRadius: "var(--radius)",
+  border: "none",
   color: "var(--text-secondary)",
   cursor: "pointer",
   flexShrink: 0,
-  lineHeight: "16px",
 };
 
 const detailsPopoverStyle: React.CSSProperties = {

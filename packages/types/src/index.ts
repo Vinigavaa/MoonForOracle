@@ -63,3 +63,14 @@ export type {
   WorkspaceReadFileRequest,
   WorkspaceReadFileResponse,
 } from "./workspace";
+export type {
+  EditorThemeConfig,
+  ThemeFileEntry,
+  ThemeListResponse,
+  ThemeSaveRequest,
+  ThemeRenameRequest,
+  ThemeDeleteRequest,
+  ThemeDuplicateRequest,
+  ThemeSetDefaultRequest,
+  ThemeExportRequest,
+} from "./theme";

@@ -27,7 +27,6 @@ interface QueryWorkspaceProps {
   activeConnectionId: string | null;
   hasPendingTransaction: boolean;
   executeTriggerRef: React.MutableRefObject<(() => void) | null>;
-  executeAllTriggerRef: React.MutableRefObject<(() => void) | null>;
 }
 
 export interface QueryWorkspaceHandle {
@@ -44,7 +43,6 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
     activeConnectionId,
     hasPendingTransaction,
     executeTriggerRef,
-    executeAllTriggerRef,
   },
   ref,
 ) {
@@ -401,12 +399,6 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
     const activeGroupId = resolvedActiveGroupId;
     if (!activeGroupId) return;
     groupRefs.current[activeGroupId]?.executeActive();
-  };
-
-  executeAllTriggerRef.current = () => {
-    const activeGroupId = resolvedActiveGroupId;
-    if (!activeGroupId) return;
-    groupRefs.current[activeGroupId]?.executeAll();
   };
 
   useImperativeHandle(ref, () => ({

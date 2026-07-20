@@ -1,73 +1,12 @@
 /**
- * Editor theme preferences — persisted to localStorage.
+ * Editor theme preferences — current draft persisted to localStorage.
+ * Named presets live on disk as JSON (see themePresets.ts).
  * Controls CodeMirror appearance across the entire application.
  */
 
-export interface EditorThemeConfig {
-  appBg: string;
-  sidebarBg: string;
-  topbarBg: string;
-  tabBarBg: string;
-  tabActiveBg: string;
-  panelBg: string;
-  surfaceBg: string;
-  resultViewerBg: string;
-  gridBg: string;
-  gridHeaderBg: string;
-  gridAltRowBg: string;
-  modalBg: string;
-  popupBg: string;
-  hoverBg: string;
-  selectedBg: string;
-  activeBg: string;
-  focusColor: string;
-  textPrimary: string;
-  textSecondary: string;
-  textTitle: string;
-  textPlaceholder: string;
-  textMuted: string;
-  borderColor: string;
-  dividerColor: string;
-  buttonPrimaryBg: string;
-  buttonPrimaryText: string;
-  buttonSecondaryBg: string;
-  buttonSecondaryText: string;
-  buttonDisabledBg: string;
-  buttonDisabledText: string;
-  info: string;
-  success: string;
-  warning: string;
-  danger: string;
-  statusConnected: string;
-  statusDisconnected: string;
-  statusPending: string;
-  cellSelectedBg: string;
-  cellEditingBg: string;
-  cellModifiedBg: string;
-  rowPendingBg: string;
-  scrollbarTrack: string;
-  scrollbarThumb: string;
-  scrollbarThumbHover: string;
-  codeViewerBg: string;
-  bgEditor: string;
-  bgGutter: string;
-  textDefault: string;
-  textKeyword: string;
-  textString: string;
-  textNumber: string;
-  textComment: string;
-  textIdentifier: string;
-  textOperator: string;
-  textPunctuation: string;
-  activeLine: string;
-  selection: string;
-  cursor: string;
-  scopeLineColor: string;
-  scopeLineOpacity: number;
-  fontSize: number;
-  fontFamily: string;
-  baseTheme: "dark" | "light";
-}
+import type { EditorThemeConfig } from "@gavadb/types";
+
+export type { EditorThemeConfig };
 
 const STORAGE_KEY = "gavadb:editor-theme";
 export const FIXED_FONT_FAMILY = '"Cascadia Code", "Consolas", monospace';

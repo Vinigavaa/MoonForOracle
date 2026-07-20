@@ -196,7 +196,7 @@ export function parseSqlStatements(sql: string): ParsedSqlStatement[] {
 
     if (char === ";") {
       if (!plsqlMode || canTerminatePlsql) {
-        finalizeStatement(i);
+        finalizeStatement(plsqlMode ? i + 1 : i);
         statementStart = i + 1;
       }
       i += 1;
@@ -276,6 +276,20 @@ export function resolveSqlSelection(sql: string, selectionStart: number, selecti
     text: sql.slice(bounds.start, bounds.end),
     index: 0,
   };
+}
+
+export function normalizeExecutableSql(sql: string): string {
+  const trimmed = sql.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  const statements = parseSqlStatements(trimmed);
+  if (statements.length !== 1) {
+    return trimmed;
+  }
+
+  return statements[0]!.text;
 }
 
 function trimStatementBounds(sql: string, start: number, end: number): SqlStatementRange | null {
