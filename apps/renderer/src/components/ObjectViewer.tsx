@@ -7,11 +7,13 @@ import type {
 } from "@gavadb/types";
 import { useObjectDetail } from "../hooks/useObjectDetail";
 import { ObjectEditorContainer } from "./ObjectEditorContainer";
+import type { ObjectNavigationTarget } from "./query-workspace/queryWorkspaceTypes";
 
 interface ObjectViewerProps {
   objectType: DatabaseObjectType;
   objectName: string;
   activeConnectionId?: string | null;
+  navTarget?: ObjectNavigationTarget | null;
   onViewSql?: (type: DatabaseObjectType, name: string) => void;
 }
 
@@ -37,7 +39,7 @@ const TYPE_COLORS: Record<DatabaseObjectType, string> = {
   ckcs: "var(--info)",
 };
 
-export function ObjectViewer({ objectType, objectName, activeConnectionId = null, onViewSql }: ObjectViewerProps) {
+export function ObjectViewer({ objectType, objectName, activeConnectionId = null, navTarget = null, onViewSql }: ObjectViewerProps) {
   const { detail, error, loading, reload } = useObjectDetail(objectType, objectName);
   const showToolbar = detail?.kind !== "source";
   const isSourceDetail = detail?.kind === "source";
@@ -89,7 +91,7 @@ export function ObjectViewer({ objectType, objectName, activeConnectionId = null
             {detail.kind === "table" && <TableView detail={detail} onViewSql={onViewSql} />}
             {detail.kind === "view" && <ViewView detail={detail} onViewSql={onViewSql} />}
             {detail.kind === "constraint" && <ConstraintView detail={detail} />}
-            {detail.kind === "source" && <ObjectEditorContainer detail={detail} connectionId={activeConnectionId} />}
+            {detail.kind === "source" && <ObjectEditorContainer detail={detail} connectionId={activeConnectionId} navTarget={navTarget} />}
           </>
         )}
       </div>

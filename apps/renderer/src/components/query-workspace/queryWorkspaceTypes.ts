@@ -43,12 +43,22 @@ export interface QueryTabState {
   hasPendingTransaction: boolean;
 }
 
+/** Alvo de navegação dentro do editor de um objeto de código (ex.: pular para
+ *  a declaração de um membro de package). `token` é um contador monotônico que
+ *  garante o re-disparo do scroll mesmo ao clicar no mesmo membro de novo. */
+export interface ObjectNavigationTarget {
+  line: number;
+  part: "spec" | "body";
+  token: number;
+}
+
 export interface ObjectTabState {
   kind: "object";
   id: string;
   objectType: DatabaseObjectType;
   objectName: string;
   connectionId: string | null;
+  navTarget: ObjectNavigationTarget | null;
 }
 
 export interface ObjectSqlTabState {
@@ -130,6 +140,7 @@ export function createObjectTab(
     objectType,
     objectName,
     connectionId: partial?.connectionId ?? connectionId,
+    navTarget: partial?.navTarget ?? null,
   };
 }
 

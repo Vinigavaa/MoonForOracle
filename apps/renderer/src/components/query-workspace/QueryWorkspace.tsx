@@ -12,6 +12,7 @@ import {
   getWorkspaceTabLabel,
   isQueryTab,
   type EditorGroup,
+  type ObjectNavigationTarget,
   type QueryDropPosition,
   type QueryTabDragData,
   type QueryTabState,
@@ -27,12 +28,13 @@ interface QueryWorkspaceProps {
   activeConnectionId: string | null;
   hasPendingTransaction: boolean;
   executeTriggerRef: React.MutableRefObject<(() => void) | null>;
+  onActiveObjectChange?: (object: { type: DatabaseObjectType; name: string } | null) => void;
 }
 
 export interface QueryWorkspaceHandle {
   focus: () => void;
   openFile: (file: WorkspaceReadFileResponse) => void;
-  openObject: (type: DatabaseObjectType, name: string) => void;
+  openObject: (type: DatabaseObjectType, name: string, target?: { line: number; part?: "spec" | "body" }) => void;
   openObjectSql: (type: DatabaseObjectType, name: string) => void;
   addTab: () => void;
 }
@@ -43,6 +45,7 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
     activeConnectionId,
     hasPendingTransaction,
     executeTriggerRef,
+    onActiveObjectChange,
   },
   ref,
 ) {
@@ -52,12 +55,27 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
   const [dragState, setDragState] = useState<QueryTabDragData | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const groupRefs = useRef<Record<string, QueryEditorGroupHandle | null>>({});
+  const navTokenRef = useRef(0);
 
   useEffect(() => {
     saveQueryWorkspacePreferences(workspace);
   }, [workspace]);
 
   const resolvedActiveGroupId = workspace.activeGroupId ?? workspace.groups[0]?.id ?? null;
+
+  // Reporta ao App o objeto (package/procedure/...) da aba ativa, para o
+  // Navigator da sidebar refletir o que está aberto no editor.
+  const activeGroupForObject = workspace.groups.find((group) => group.id === resolvedActiveGroupId);
+  const activeTabForObject = activeGroupForObject?.tabs.find((tab) => tab.id === activeGroupForObject.activeTabId);
+  const activeObjectType = activeTabForObject?.kind === "object" ? activeTabForObject.objectType : null;
+  const activeObjectName = activeTabForObject?.kind === "object" ? activeTabForObject.objectName : null;
+
+  useEffect(() => {
+    if (!onActiveObjectChange) return;
+    onActiveObjectChange(
+      activeObjectType && activeObjectName ? { type: activeObjectType, name: activeObjectName } : null,
+    );
+  }, [activeObjectType, activeObjectName, onActiveObjectChange]);
 
   useEffect(() => {
     if (hasPendingTransaction) return;
@@ -235,8 +253,13 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
     kind: "object" | "object-sql",
     objectType: DatabaseObjectType,
     objectName: string,
+    target?: { line: number; part?: "spec" | "body" },
   ) => {
     let focusTargetGroupId: string | null = null;
+
+    const navTarget: ObjectNavigationTarget | null = kind === "object" && target
+      ? { line: target.line, part: target.part ?? "body", token: ++navTokenRef.current }
+      : null;
 
     setWorkspace((prev) => {
       for (const group of prev.groups) {
@@ -251,7 +274,15 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
             ...prev,
             activeGroupId: group.id,
             groups: prev.groups.map((current) => (
-              current.id === group.id ? { ...current, activeTabId: existing.id } : current
+              current.id === group.id
+                ? {
+                    ...current,
+                    activeTabId: existing.id,
+                    tabs: navTarget
+                      ? current.tabs.map((tab) => (tab.id === existing.id ? { ...tab, navTarget } : tab))
+                      : current.tabs,
+                  }
+                : current
             )),
           };
         }
@@ -261,7 +292,7 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
       if (!targetGroupId) return prev;
 
       const tab = kind === "object"
-        ? createObjectTab(objectType, objectName, activeConnectionId)
+        ? createObjectTab(objectType, objectName, activeConnectionId, navTarget ? { navTarget } : undefined)
         : createObjectSqlTab(objectType, objectName, activeConnectionId);
       focusTargetGroupId = targetGroupId;
 
@@ -279,8 +310,8 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
     focusGroup(focusTargetGroupId);
   }, [activeConnectionId, focusGroup]);
 
-  const handleOpenObject = useCallback((type: DatabaseObjectType, name: string) => {
-    openObjectTab(null, "object", type, name);
+  const handleOpenObject = useCallback((type: DatabaseObjectType, name: string, target?: { line: number; part?: "spec" | "body" }) => {
+    openObjectTab(null, "object", type, name, target);
   }, [openObjectTab]);
 
   const handleOpenObjectSql = useCallback((type: DatabaseObjectType, name: string) => {

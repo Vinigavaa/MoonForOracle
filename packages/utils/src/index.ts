@@ -19,3 +19,5 @@ export type { BindOccurrence, ExtractedBind } from "./sql-binds.js";
 export { extractBindParameters } from "./sql-binds.js";
 export type { SqlIdentifierPart, SqlObjectReference } from "./sql-object-reference.js";
 export { extractObjectReferenceAtCursor, isInsideSqlStringOrComment } from "./sql-object-reference.js";
+export type { PackageMember } from "./package-members.js";
+export { parsePackageMembers } from "./package-members.js";

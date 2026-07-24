@@ -3,10 +3,12 @@ import type { CompileError, CompileObjectRequest, ObjectSourceTab, SourceDetail 
 import { useToastContext } from "../hooks/ToastContext";
 import { ObjectEditorHeader } from "./ObjectEditorHeader";
 import { SqlCodeEditor, type SqlCodeEditorHandle } from "./SqlCodeEditor";
+import type { ObjectNavigationTarget } from "./query-workspace/queryWorkspaceTypes";
 
 interface ObjectEditorContainerProps {
   detail: SourceDetail;
   connectionId: string | null;
+  navTarget?: ObjectNavigationTarget | null;
 }
 
 interface EditableSourceTabState extends ObjectSourceTab {
@@ -16,7 +18,7 @@ interface EditableSourceTabState extends ObjectSourceTab {
   compiling: boolean;
 }
 
-export function ObjectEditorContainer({ detail, connectionId }: ObjectEditorContainerProps) {
+export function ObjectEditorContainer({ detail, connectionId, navTarget = null }: ObjectEditorContainerProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [tabs, setTabs] = useState<EditableSourceTabState[]>(() => createEditableTabs(detail.tabs));
   const [activeTabId, setActiveTabId] = useState(() => resolveDefaultActiveTabId(detail.tabs));
@@ -27,6 +29,22 @@ export function ObjectEditorContainer({ detail, connectionId }: ObjectEditorCont
     setTabs(createEditableTabs(detail.tabs));
     setActiveTabId(resolveDefaultActiveTabId(detail.tabs));
   }, [detail]);
+
+  // Navegação até um membro: troca para a parte alvo (ex.: body) e rola até a
+  // linha da declaração. Roda também quando `detail` acaba de carregar (open
+  // assíncrono) e a cada novo token (re-clique no mesmo membro). O rAF garante
+  // que o CodeMirror já sincronizou o texto da parte ativa antes do focusLine.
+  useEffect(() => {
+    if (!navTarget) return;
+    if (!tabs.some((tab) => tab.id === navTarget.part)) return;
+
+    setActiveTabId(navTarget.part);
+    const raf = requestAnimationFrame(() => {
+      editorRef.current?.focusLine(navTarget.line);
+    });
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navTarget?.token, tabs]);
 
   const activeTab = useMemo(
     () => tabs.find((tab) => tab.id === activeTabId) ?? tabs[0] ?? null,

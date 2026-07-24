@@ -279,6 +279,7 @@ function renderTabContent({
           objectType={tab.objectType}
           objectName={tab.objectName}
           activeConnectionId={tab.connectionId ?? activeConnectionId}
+          navTarget={tab.navTarget}
           onViewSql={onOpenObjectSql}
         />
       ) : (

@@ -47,6 +47,7 @@ export function App() {
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => loadSidebarPreferences().collapsed);
   const [updaterStatus, setUpdaterStatus] = useState<UpdaterStatus | null>(null);
+  const [activeObject, setActiveObject] = useState<{ type: DatabaseObjectType; name: string } | null>(null);
   const dismissedUpdateVersionRef = useRef<string | null>(null);
   const executeTriggerRef = useRef<(() => void) | null>(null);
   const sqlEditorRef = useRef<SqlEditorHandle | null>(null);
@@ -284,8 +285,8 @@ export function App() {
     executeTriggerRef.current?.();
   }, [isConnected, toast]);
 
-  const handleObjectSelect = useCallback((type: DatabaseObjectType, name: string) => {
-    sqlEditorRef.current?.openObject(type, name);
+  const handleObjectSelect = useCallback((type: DatabaseObjectType, name: string, target?: { line: number; part?: "spec" | "body" }) => {
+    sqlEditorRef.current?.openObject(type, name, target);
   }, []);
 
   const handleOpenWorkspaceFile = useCallback((file: WorkspaceReadFileResponse) => {
@@ -322,6 +323,7 @@ export function App() {
           isConnected={isConnected}
           onObjectSelect={handleObjectSelect}
           onOpenWorkspaceFile={handleOpenWorkspaceFile}
+          activeObject={activeObject}
           savedConnections={savedConns.connections}
           activeConnectionId={activeConnectionId}
           connectingId={connectingId}
@@ -340,6 +342,7 @@ export function App() {
               activeConnectionId={activeConnectionId}
               hasPendingTransaction={transactionState.hasPendingChanges}
               executeTriggerRef={executeTriggerRef}
+              onActiveObjectChange={setActiveObject}
             />
           </div>
         </div>

@@ -1,15 +1,26 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Blocks, ChevronDown, DatabaseZap, FolderCode, Globe, Menu, Package, PackageSearch, Play, Plug, Table, type LucideIcon } from "lucide-react";
 import type { DatabaseObjectType, DatabaseObjectSummary, SavedConnection, WorkspaceReadFileResponse } from "@gavadb/types";
+import type { PackageMember } from "@gavadb/utils";
 import { useObjectList, type SectionState } from "../hooks/useObjectList";
+import { usePackageMembers, type PackageMembersState } from "../hooks/usePackageMembers";
 import { loadSidebarPreferences, saveSidebarPreferences } from "../lib/sidebarPreferences";
 import { WorkspacePanel } from "./workspace/WorkspacePanel";
+
+type ObjectNavigation = { line: number; part?: "spec" | "body" };
+
+/** Objeto atualmente aberto/ativo no editor, reportado pelo workspace. */
+export interface ActiveEditorObject {
+  type: DatabaseObjectType;
+  name: string;
+}
 
 interface SidebarProps {
   collapsed: boolean;
   isConnected: boolean;
-  onObjectSelect: (type: DatabaseObjectType, name: string) => void;
+  onObjectSelect: (type: DatabaseObjectType, name: string, target?: ObjectNavigation) => void;
   onOpenWorkspaceFile: (file: WorkspaceReadFileResponse) => void;
+  activeObject: ActiveEditorObject | null;
   savedConnections: SavedConnection[];
   activeConnectionId: string | null;
   connectingId: string | null;
@@ -41,6 +52,7 @@ export function Sidebar({
   isConnected,
   onObjectSelect,
   onOpenWorkspaceFile,
+  activeObject,
   savedConnections,
   activeConnectionId,
   connectingId,
@@ -54,7 +66,9 @@ export function Sidebar({
   const [filter, setFilter] = useState("");
   const [connSectionExpanded, setConnSectionExpanded] = useState(() => loadSidebarPreferences().connectionsExpanded);
   const [dbObjectsExpanded, setDbObjectsExpanded] = useState(() => loadSidebarPreferences().databaseObjectsExpanded);
+  const [navigatorExpanded, setNavigatorExpanded] = useState(true);
   const { getSection, loadSection } = useObjectList(isConnected);
+  const packageMembers = usePackageMembers(isConnected);
 
   useEffect(() => {
     const preferences = loadSidebarPreferences();
@@ -82,6 +96,10 @@ export function Sidebar({
       return next;
     });
   }, [getSection, loadSection]);
+
+  const navigateToMember = useCallback((packageName: string, member: PackageMember) => {
+    onObjectSelect("packages", packageName, { line: member.line, part: "body" });
+  }, [onObjectSelect]);
 
   const lowerFilter = filter.toLowerCase();
 
@@ -146,6 +164,16 @@ export function Sidebar({
         onToggleFavorite={onToggleFavorite}
       />
       <WorkspacePanel onOpenFile={onOpenWorkspaceFile} />
+
+      {/* ── Navigator (subprogramas do package aberto) ── */}
+      <PackageNavigatorSection
+        expanded={navigatorExpanded}
+        onToggle={() => setNavigatorExpanded((current) => !current)}
+        activeObject={activeObject}
+        getMembers={packageMembers.get}
+        loadMembers={packageMembers.load}
+        onNavigateMember={navigateToMember}
+      />
 
       {/* ��─ Database Objects section ── */}
       <div style={{ borderBottom: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
@@ -604,7 +632,7 @@ interface SidebarSectionProps {
   filter: string;
   onToggle: () => void;
   onReload: () => void;
-  onObjectSelect: (type: DatabaseObjectType, name: string) => void;
+  onObjectSelect: (type: DatabaseObjectType, name: string, target?: ObjectNavigation) => void;
 }
 
 function SidebarSection({
@@ -683,7 +711,7 @@ interface SectionContentProps {
   filtered: DatabaseObjectSummary[];
   filter: string;
   onReload: () => void;
-  onObjectSelect: (type: DatabaseObjectType, name: string) => void;
+  onObjectSelect: (type: DatabaseObjectType, name: string, target?: ObjectNavigation) => void;
 }
 
 function SectionContent({ type, state, filtered, filter, onReload, onObjectSelect }: SectionContentProps) {
@@ -747,9 +775,107 @@ function SectionContent({ type, state, filtered, filter, onReload, onObjectSelec
           </span>
           {obj.status === "INVALID" && (
             <span style={{ fontSize: 10, color: "var(--danger)", flexShrink: 0 }} title="Invalid object">
-              \u25CF
+              {"\u25CF"}
             </span>
           )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// \u2500\u2500 Package Navigator: subprogramas do package aberto no editor \u2500\u2500
+
+interface PackageNavigatorSectionProps {
+  expanded: boolean;
+  onToggle: () => void;
+  activeObject: ActiveEditorObject | null;
+  getMembers: (name: string) => PackageMembersState;
+  loadMembers: (name: string) => void;
+  onNavigateMember: (packageName: string, member: PackageMember) => void;
+}
+
+function PackageNavigatorSection({
+  expanded, onToggle, activeObject, getMembers, loadMembers, onNavigateMember,
+}: PackageNavigatorSectionProps) {
+  const packageName = activeObject?.type === "packages" ? activeObject.name : null;
+  const membersState = packageName ? getMembers(packageName) : null;
+
+  // Carrega automaticamente os subprogramas do package ativo ao abrir/trocar de aba.
+  useEffect(() => {
+    if (!packageName) return;
+    const state = getMembers(packageName);
+    if (!state.loaded && !state.loading) {
+      loadMembers(packageName);
+    }
+  }, [packageName, getMembers, loadMembers]);
+
+  return (
+    <div style={{ borderBottom: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+      <CollapsibleSectionHeader
+        label="Navigator"
+        expanded={expanded}
+        count={membersState?.loaded ? (membersState.members.length || undefined) : undefined}
+        onToggle={onToggle}
+      />
+      {expanded && (
+        <div style={{ maxHeight: 260, overflowY: "auto", paddingBottom: 4 }}>
+          {!packageName || !membersState ? (
+            <div style={memberInfoStyle}>Open a package to see its subprograms</div>
+          ) : (
+            <PackageMemberList
+              membersState={membersState}
+              onReloadMembers={() => loadMembers(packageName)}
+              onNavigateMember={(member) => onNavigateMember(packageName, member)}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PackageMemberList({
+  membersState,
+  onReloadMembers,
+  onNavigateMember,
+}: {
+  membersState: PackageMembersState;
+  onReloadMembers: () => void;
+  onNavigateMember: (member: PackageMember) => void;
+}) {
+  if (membersState.loading) {
+    return <div style={memberInfoStyle}><span style={{ animation: "pulse 1s infinite" }}>Loading...</span></div>;
+  }
+
+  if (membersState.error) {
+    return (
+      <div>
+        <div style={{ ...memberInfoStyle, color: "var(--danger)" }}>{membersState.error}</div>
+        <button onClick={onReloadMembers} style={memberRetryButtonStyle}>Retry</button>
+      </div>
+    );
+  }
+
+  if (membersState.loaded && membersState.members.length === 0) {
+    return <div style={memberInfoStyle}>No members</div>;
+  }
+
+  return (
+    <div>
+      {membersState.members.map((member) => (
+        <button
+          key={`${member.kind}:${member.name}:${member.line}`}
+          onClick={() => onNavigateMember(member)}
+          title={`${member.kind === "function" ? "Function" : "Procedure"} ${member.name}`}
+          style={memberRowButtonStyle}
+        >
+          <span style={memberIconStyle} aria-hidden="true">
+            {member.kind === "procedure" ? <Blocks size={12} strokeWidth={1.9} /> : "\u0192"}
+          </span>
+          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {member.name}
+          </span>
         </button>
       ))}
     </div>
@@ -761,6 +887,51 @@ const infoStyle: React.CSSProperties = {
   fontSize: 11,
   color: "var(--text-muted)",
   fontStyle: "italic",
+};
+
+const memberInfoStyle: React.CSSProperties = {
+  padding: "4px 12px 4px 24px",
+  fontSize: 11,
+  color: "var(--text-muted)",
+  fontStyle: "italic",
+};
+
+const memberRetryButtonStyle: React.CSSProperties = {
+  margin: "0 12px 6px 24px",
+  padding: "2px 8px",
+  fontSize: 11,
+  background: "transparent",
+  border: "1px solid var(--border-color)",
+  borderRadius: "var(--radius)",
+  color: "var(--text-secondary)",
+  cursor: "pointer",
+};
+
+const memberRowButtonStyle: React.CSSProperties = {
+  width: "100%",
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "3px 12px 3px 24px",
+  background: "transparent",
+  border: "none",
+  borderRadius: 0,
+  color: "var(--text-secondary)",
+  fontSize: "var(--font-size-sm)",
+  textAlign: "left",
+  fontFamily: "var(--font-ui)",
+  cursor: "pointer",
+};
+
+const memberIconStyle: React.CSSProperties = {
+  width: 14,
+  height: 14,
+  flexShrink: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  color: "var(--text-muted)",
+  fontStyle: "normal",
 };
 
 function highlightMatch(name: string, filter: string): React.ReactNode {

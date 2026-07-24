@@ -10,12 +10,13 @@ interface SqlEditorProps {
   activeConnectionId?: string | null;
   hasPendingTransaction?: boolean;
   executeTriggerRef: React.MutableRefObject<(() => void) | null>;
+  onActiveObjectChange?: (object: { type: DatabaseObjectType; name: string } | null) => void;
 }
 
 export interface SqlEditorHandle {
   focus: () => void;
   openFile: (file: WorkspaceReadFileResponse) => void;
-  openObject: (type: DatabaseObjectType, name: string) => void;
+  openObject: (type: DatabaseObjectType, name: string, target?: { line: number; part?: "spec" | "body" }) => void;
   openObjectSql: (type: DatabaseObjectType, name: string) => void;
   addTab: () => void;
 }
@@ -26,6 +27,7 @@ export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(function Sq
     activeConnectionId = null,
     hasPendingTransaction = false,
     executeTriggerRef,
+    onActiveObjectChange,
   },
   ref,
 ) {
@@ -36,6 +38,7 @@ export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(function Sq
       activeConnectionId={activeConnectionId}
       hasPendingTransaction={hasPendingTransaction}
       executeTriggerRef={executeTriggerRef}
+      onActiveObjectChange={onActiveObjectChange}
     />
   );
 });
