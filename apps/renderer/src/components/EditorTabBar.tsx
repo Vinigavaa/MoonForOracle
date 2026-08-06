@@ -1,4 +1,4 @@
-import type { CSSProperties, DragEventHandler } from "react";
+import { useState, type CSSProperties, type DragEventHandler } from "react";
 
 export interface EditorTabBarItem {
   id: string;
@@ -21,6 +21,8 @@ interface EditorTabBarProps {
   onAddTab?: () => void;
   addButtonTitle?: string;
   tabMinWidth?: number;
+  /** "rounded" usa o visual de aba arredondada no topo (abas de query). */
+  appearance?: "underline" | "rounded";
 }
 
 export function EditorTabBar({
@@ -31,10 +33,14 @@ export function EditorTabBar({
   onAddTab,
   addButtonTitle = "Nova Query",
   tabMinWidth,
+  appearance = "underline",
 }: EditorTabBarProps) {
+  const isRounded = appearance === "rounded";
+  const [addButtonHovered, setAddButtonHovered] = useState(false);
+
   return (
-    <div style={tabBarStyle}>
-      <div style={tabListStyle}>
+    <div style={isRounded ? roundedTabBarStyle : tabBarStyle}>
+      <div style={isRounded ? roundedTabListStyle : tabListStyle}>
         {tabs.map((tab) => {
           const isActive = tab.id === activeTabId;
           return (
@@ -57,7 +63,15 @@ export function EditorTabBar({
               }}
               onDragStart={tab.onDragStart}
               onDragEnd={tab.onDragEnd}
-              style={{
+              style={isRounded ? {
+                ...roundedTabButtonStyle,
+                minWidth: tabMinWidth ?? roundedTabButtonStyle.minWidth,
+                background: isActive ? ROUNDED_TAB_ACTIVE_BG : "transparent",
+                color: isActive
+                  ? ROUNDED_TAB_ACTIVE_TEXT
+                  : ROUNDED_TAB_DIM,
+                opacity: tab.dimmed && !isActive ? 0.82 : 1,
+              } : {
                 ...tabButtonStyle,
                 minWidth: tabMinWidth ?? tabButtonStyle.minWidth,
                 background: isActive ? "var(--tab-active-bg)" : "transparent",
@@ -83,7 +97,7 @@ export function EditorTabBar({
                     event.stopPropagation();
                     onTabClose(tab.id);
                   }}
-                  style={closeButtonStyle}
+                  style={isRounded ? roundedCloseButtonStyle : closeButtonStyle}
                 >
                   {"\u00D7"}
                 </span>
@@ -98,7 +112,12 @@ export function EditorTabBar({
             onClick={onAddTab}
             title={addButtonTitle}
             aria-label={addButtonTitle}
-            style={addButtonStyle}
+            onMouseEnter={isRounded ? () => setAddButtonHovered(true) : undefined}
+            onMouseLeave={isRounded ? () => setAddButtonHovered(false) : undefined}
+            style={isRounded ? {
+              ...roundedAddButtonStyle,
+              background: addButtonHovered ? ROUNDED_ADD_HOVER_BG : "transparent",
+            } : addButtonStyle}
           >
             +
           </button>
@@ -173,6 +192,85 @@ const closeButtonStyle: CSSProperties = {
   lineHeight: 1,
   cursor: "pointer",
   flexShrink: 0,
+};
+
+// ─── Variante "rounded" (abas de query) ─────────────────────────────
+// Geometria fixa da especificação de design; cores saem do tema editável.
+
+const ROUNDED_TAB_ACTIVE_BG = "var(--tab-active-bg)";
+const ROUNDED_TAB_ACTIVE_TEXT = "var(--text-primary)";
+const ROUNDED_TAB_DIM = "var(--text-muted)";
+const ROUNDED_TAB_BORDER = "var(--border-color)";
+const ROUNDED_ADD_HOVER_BG = "var(--hover-bg)";
+
+const roundedTabBarStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "row",
+  flexWrap: "nowrap",
+  alignItems: "center",
+  height: 44,
+  padding: "0 10px",
+  gap: 4,
+  background: "var(--tab-bar-bg)",
+  borderBottom: `1px solid ${ROUNDED_TAB_BORDER}`,
+  flexShrink: 0,
+  overflow: "hidden",
+};
+
+const roundedTabListStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "row",
+  flexWrap: "nowrap",
+  alignItems: "center",
+  gap: 4,
+  minWidth: 0,
+  flex: 1,
+  overflowX: "auto",
+  overflowY: "hidden",
+};
+
+const roundedTabButtonStyle: CSSProperties = {
+  display: "flex",
+  flex: "0 0 auto",
+  alignItems: "center",
+  gap: 8,
+  minWidth: 0,
+  maxWidth: 220,
+  padding: "8px 14px",
+  border: "none",
+  borderRadius: "10px 10px 0 0",
+  background: "transparent",
+  fontSize: 13,
+  fontWeight: 500,
+  lineHeight: 1,
+  whiteSpace: "nowrap",
+};
+
+const roundedCloseButtonStyle: CSSProperties = {
+  color: ROUNDED_TAB_DIM,
+  fontSize: 13,
+  lineHeight: 1,
+  cursor: "pointer",
+  flexShrink: 0,
+};
+
+const roundedAddButtonStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flex: "0 0 auto",
+  width: 30,
+  height: 30,
+  padding: 0,
+  border: "none",
+  borderRadius: 9,
+  background: "transparent",
+  color: ROUNDED_TAB_DIM,
+  fontSize: 16,
+  fontWeight: 500,
+  lineHeight: 1,
+  flexShrink: 0,
+  whiteSpace: "nowrap",
 };
 
 const addButtonStyle: CSSProperties = {

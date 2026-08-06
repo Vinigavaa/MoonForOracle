@@ -141,6 +141,7 @@ export const QueryEditorGroup = memo(forwardRef<QueryEditorGroupHandle, QueryEdi
         onAddTab={onAddTab}
         addButtonTitle="Nova Query"
         tabMinWidth={0}
+        appearance="rounded"
       />
 
       <div

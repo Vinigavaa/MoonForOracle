@@ -791,7 +791,6 @@ function isSameOrDescendant(sourcePath: string, targetPath: string): boolean {
 }
 
 const panelStyle: CSSProperties = {
-  borderBottom: "1px solid var(--border-subtle)",
   display: "flex",
   flexDirection: "column",
   maxHeight: "45vh",

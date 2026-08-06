@@ -17,7 +17,7 @@ export const DEFAULT_THEME: EditorThemeConfig = {
   sidebarBg: "#181825",
   topbarBg: "#181825",
   tabBarBg: "#181825",
-  tabActiveBg: "#1e1e2e",
+  tabActiveBg: "#10141a", // oklch(0.19 0.014 260) — especificação de design
   panelBg: "#1e1e2e",
   surfaceBg: "#252536",
   resultViewerBg: "#1e1e2e",
@@ -58,17 +58,19 @@ export const DEFAULT_THEME: EditorThemeConfig = {
   scrollbarThumb: "#3b3b54",
   scrollbarThumbHover: "#6c7086",
   codeViewerBg: "#1e1e2e",
-  bgEditor: "#1e1e2e",
-  bgGutter: "#181825",
+  // Paleta do editor conforme a especificação de design (oklch convertido para
+  // hex porque o seletor de cores das preferências usa <input type="color">).
+  bgEditor: "#080a0f", // oklch(0.145 0.011 260)
+  bgGutter: "#080a0f", // igual ao fundo do código: gutter sem divisória
   textDefault: "#cdd6f4",
-  textKeyword: "#7dd3fc",
+  textKeyword: "#ef6dc9", // oklch(0.72 0.19 340)
   textString: "#a6e3a1",
   textNumber: "#fab387",
   textComment: "#6c7086",
-  textIdentifier: "#cdd6f4",
-  textOperator: "#93c5fd",
+  textIdentifier: "#ccced1", // oklch(0.85 0.005 260)
+  textOperator: "#7d8086", // oklch(0.6 0.01 260)
   textPunctuation: "#bac2de",
-  activeLine: "rgba(255, 255, 255, 0.04)",
+  activeLine: "rgba(18, 22, 28, 0.5)", // oklch(0.2 0.014 260 / 0.5)
   selection: "rgba(137, 180, 250, 0.18)",
   cursor: "#89b4fa",
   scopeLineColor: "#6c7086",

@@ -176,7 +176,7 @@ export function Sidebar({
       />
 
       {/* ��─ Database Objects section ── */}
-      <div style={{ borderBottom: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+      <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
         <CollapsibleSectionHeader
           label="Database Objects"
           expanded={dbObjectsExpanded}
@@ -186,7 +186,7 @@ export function Sidebar({
         {dbObjectsExpanded && (
           <>
             {isConnected && (
-              <div style={{ padding: "6px 8px", borderBottom: "1px solid var(--border-subtle)" }}>
+              <div style={{ padding: "6px 8px" }}>
                 <input
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
@@ -271,7 +271,7 @@ function SavedConnectionsSection({
   }, [detailsOpenId]);
 
   return (
-    <div style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+    <div>
       <CollapsibleSectionHeader
         label="Connections"
         expanded={expanded}
@@ -543,7 +543,6 @@ const sidebarHeaderRowStyle: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "space-between",
   padding: "6px 8px 6px 12px",
-  borderBottom: "1px solid var(--border-subtle)",
   background: "color-mix(in srgb, var(--sidebar-bg) 82%, black)",
 };
 
@@ -811,7 +810,7 @@ function PackageNavigatorSection({
   }, [packageName, getMembers, loadMembers]);
 
   return (
-    <div style={{ borderBottom: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", flexShrink: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", flexShrink: 0 }}>
       <CollapsibleSectionHeader
         label="Navigator"
         expanded={expanded}

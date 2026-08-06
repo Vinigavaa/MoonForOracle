@@ -61,6 +61,11 @@ export interface SqlCodeEditorHandle {
 
 // ─── Build CodeMirror theme from config ─────────────────────────────
 
+// Geometria fixa do editor vinda da especificação de design.
+// Cores e fonte continuam saindo do tema editável (EditorThemeConfig).
+const SPEC_LINE_HEIGHT = "1.7";
+const SPEC_GUTTER_WIDTH = 46;
+
 function buildCmTheme(cfg: EditorThemeConfig) {
   return EditorView.theme({
     "&": {
@@ -70,15 +75,19 @@ function buildCmTheme(cfg: EditorThemeConfig) {
       background: cfg.bgEditor,
       color: cfg.textDefault,
     },
+    // Sem padding vertical: o gutter do CodeMirror não acompanha o padding do
+    // .cm-content nesta aplicação (mapa de alturas divergente das linhas reais),
+    // então um padding-top aqui desloca todos os números em relação ao código.
     ".cm-content": {
-      padding: "0 12px 8px",
+      padding: "0 0 8px",
       caretColor: cfg.cursor,
-      lineHeight: "1.6",
+      lineHeight: SPEC_LINE_HEIGHT,
       tabSize: "2",
     },
     ".cm-scroller": {
       overflow: "auto",
       fontFamily: cfg.fontFamily,
+      lineHeight: SPEC_LINE_HEIGHT,
     },
     ".cm-line": { padding: 0 },
     ".cm-sql-scope-gutter": {
@@ -126,22 +135,29 @@ function buildCmTheme(cfg: EditorThemeConfig) {
     ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
       background: `${cfg.selection} !important`,
     },
+    // Gutter sem divisória: mesmo fundo da área de código, sem borderRight.
+    // Sem padding vertical aqui — o CodeMirror já alinha o gutter ao padding
+    // do .cm-content; duplicar desloca os números em relação às linhas.
     ".cm-gutters": {
-      background: cfg.bgGutter,
+      // bgEditor (não bgGutter) de propósito: a especificação pede que o gutter
+      // se misture à área de código, então ele acompanha o fundo do editor.
+      background: cfg.bgEditor,
       color: cfg.textPlaceholder,
       border: "none",
-      borderRight: "1px solid var(--divider-color)",
-      fontSize: `${Math.max(cfg.fontSize - 2, 10)}px`,
-      minWidth: "3.5em",
+      userSelect: "none",
     },
     ".cm-lineNumbers .cm-gutterElement": {
-      padding: "0 8px 0 4px",
-      minWidth: "3em",
+      width: `${SPEC_GUTTER_WIDTH}px`,
+      minWidth: `${SPEC_GUTTER_WIDTH}px`,
+      padding: "0 16px 0 0",
       textAlign: "right",
+      lineHeight: SPEC_LINE_HEIGHT,
+      userSelect: "none",
     },
     ".cm-activeLineGutter": {
-      background: cfg.activeLine,
+      background: "transparent",
       color: cfg.cursor,
+      fontWeight: "bold",
     },
     ".cm-activeLine": { background: cfg.activeLine },
     "&.cm-focused": { outline: "none" },
@@ -207,7 +223,7 @@ function buildCmTheme(cfg: EditorThemeConfig) {
 function buildHighlightStyle(cfg: EditorThemeConfig) {
   return syntaxHighlighting(HighlightStyle.define([
     { tag: tags.keyword, color: cfg.textKeyword, fontWeight: "bold" },
-    { tag: tags.operatorKeyword, color: cfg.textOperator, fontWeight: "bold" },
+    { tag: tags.operatorKeyword, color: cfg.textKeyword, fontWeight: "bold" },
     { tag: tags.controlKeyword, color: cfg.textKeyword, fontWeight: "bold" },
     { tag: tags.definitionKeyword, color: cfg.textKeyword, fontWeight: "bold" },
     { tag: tags.operator, color: cfg.textOperator },
