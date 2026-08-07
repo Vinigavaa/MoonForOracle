@@ -55,12 +55,21 @@ export interface PrimaryKeyDetail {
   columns: ConstraintColumnInfo[];
 }
 
+/** Trigger associada a uma tabela — metadados leves, sem o corpo */
+export interface TableTriggerInfo {
+  name: string;
+  /** Evento completo, ex: "BEFORE INSERT OR UPDATE" */
+  event: string;
+  status: "ENABLED" | "DISABLED";
+}
+
 /** Detalhe estruturado de uma tabela */
 export interface TableDetail {
   kind: "table";
   objectName: string;
   columns: ColumnInfo[];
   primaryKey: PrimaryKeyDetail | null;
+  triggers: TableTriggerInfo[];
 }
 
 /** Detalhe estruturado de uma view */

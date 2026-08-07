@@ -7,6 +7,7 @@ import type {
 } from "@gavadb/types";
 import { useObjectDetail } from "../hooks/useObjectDetail";
 import { ObjectEditorContainer } from "./ObjectEditorContainer";
+import { TableTriggersModal } from "./TableTriggersModal";
 import type { ObjectNavigationTarget } from "./query-workspace/queryWorkspaceTypes";
 
 interface ObjectViewerProps {
@@ -15,6 +16,7 @@ interface ObjectViewerProps {
   activeConnectionId?: string | null;
   navTarget?: ObjectNavigationTarget | null;
   onViewSql?: (type: DatabaseObjectType, name: string) => void;
+  onOpenObject?: (type: DatabaseObjectType, name: string) => void;
 }
 
 const TYPE_LABELS: Record<DatabaseObjectType, string> = {
@@ -39,9 +41,10 @@ const TYPE_COLORS: Record<DatabaseObjectType, string> = {
   ckcs: "var(--info)",
 };
 
-export function ObjectViewer({ objectType, objectName, activeConnectionId = null, navTarget = null, onViewSql }: ObjectViewerProps) {
+export function ObjectViewer({ objectType, objectName, activeConnectionId = null, navTarget = null, onViewSql, onOpenObject }: ObjectViewerProps) {
   const { detail, error, loading, reload } = useObjectDetail(objectType, objectName);
-  const showToolbar = detail?.kind !== "source";
+  // Tabela tem cabeçalho próprio (seção COLUMNS) — sem badge de tipo nem Reload.
+  const showToolbar = detail?.kind !== "source" && detail?.kind !== "table";
   const isSourceDetail = detail?.kind === "source";
 
   return (
@@ -88,7 +91,7 @@ export function ObjectViewer({ objectType, objectName, activeConnectionId = null
 
         {detail && !loading && (
           <>
-            {detail.kind === "table" && <TableView detail={detail} onViewSql={onViewSql} />}
+            {detail.kind === "table" && <TableView detail={detail} onViewSql={onViewSql} onOpenObject={onOpenObject} />}
             {detail.kind === "view" && <ViewView detail={detail} onViewSql={onViewSql} />}
             {detail.kind === "constraint" && <ConstraintView detail={detail} />}
             {detail.kind === "source" && <ObjectEditorContainer detail={detail} connectionId={activeConnectionId} navTarget={navTarget} />}
@@ -106,37 +109,98 @@ export function ObjectViewer({ objectType, objectName, activeConnectionId = null
 function TableView({
   detail,
   onViewSql,
+  onOpenObject,
 }: {
   detail: Extract<ObjectDetailResponse, { kind: "table" }>;
   onViewSql?: (type: DatabaseObjectType, name: string) => void;
+  onOpenObject?: (type: DatabaseObjectType, name: string) => void;
 }) {
   const handleViewSql = useCallback(() => {
     onViewSql?.("tables", detail.objectName);
   }, [detail.objectName, onViewSql]);
 
+  const [triggersOpen, setTriggersOpen] = useState(false);
+  const triggers = detail.triggers ?? [];
+
+  const handleSelectTrigger = useCallback((triggerName: string) => {
+    setTriggersOpen(false);
+    onOpenObject?.("triggers", triggerName);
+  }, [onOpenObject]);
+
   return (
-    <div style={scrollSectionStyle}>
+    <div style={tableRootStyle}>
       <section>
-        <SectionHeader
-          title="Columns"
-          subtitle={detail.columns.length > 0 ? `${detail.columns.length} column(s)` : "No columns found"}
-          actions={(
-            <button onClick={handleViewSql} style={secondaryActionButtonStyle}>
-              View SQL
+        <div style={tableSectionHeaderStyle}>
+          <div>
+            <div style={tableSectionLabelStyle}>COLUMNS</div>
+            <div style={tableSectionCountStyle}>
+              {detail.columns.length > 0 ? `${detail.columns.length} column(s)` : "No columns found"}
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "row", gap: 8 }}>
+            <button type="button" onClick={handleViewSql} style={outlineButtonStyle}>
+              VIEW SQL
             </button>
-          )}
-        />
+            <button type="button" onClick={() => setTriggersOpen(true)} style={outlineButtonStyle}>
+              TRIGGERS
+              <span style={triggerCountPillStyle}>{triggers.length}</span>
+            </button>
+          </div>
+        </div>
+
         {detail.columns.length > 0 ? (
-          <ColumnTable columns={detail.columns} />
+          <div style={{ padding: "0 20px 18px" }}>
+            <ModernColumnTable columns={detail.columns} />
+          </div>
         ) : (
-          <EmptySection message="No columns found" />
+          <div style={{ padding: "0 20px 18px" }}>
+            <EmptySection message="No columns found" />
+          </div>
         )}
       </section>
 
-      <section>
+      <section style={{ padding: "0 20px 20px" }}>
         <SectionHeader title="Primary Key" />
         <PrimaryKeySection primaryKey={detail.primaryKey} />
       </section>
+
+      {triggersOpen && (
+        <TableTriggersModal
+          tableName={detail.objectName}
+          triggers={triggers}
+          onSelect={handleSelectTrigger}
+          onClose={() => setTriggersOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Columns table (table detail screen) ────────────────────────────
+
+function ModernColumnTable({ columns }: { columns: ColumnInfo[] }) {
+  return (
+    <div style={modernTableStyle}>
+      <div style={modernHeaderRowStyle}>
+        <div style={modernHeaderCellStyle}>#</div>
+        <div style={modernHeaderCellStyle}>COLUMN</div>
+        <div style={modernHeaderCellStyle}>DATA TYPE</div>
+        <div style={modernHeaderCellStyle}>NULLABLE</div>
+      </div>
+      {columns.map((col, i) => (
+        <div
+          key={col.name}
+          style={{
+            ...modernDataRowStyle,
+            background: i % 2 === 0 ? "transparent" : "var(--grid-alt-row-bg)",
+          }}
+        >
+          <div style={modernIndexCellStyle}>{col.position}</div>
+          <div style={modernNameCellStyle}>{col.name}</div>
+          <div style={modernTypeCellStyle}>{col.dataType}</div>
+          <div style={modernNullableCellStyle}>{col.nullable ? "Yes" : "No"}</div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -357,6 +421,122 @@ const viewerContentStyle: React.CSSProperties = {
   minWidth: 0,
   minHeight: 0,
   background: "var(--code-viewer-bg)",
+};
+
+const tableRootStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  width: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+};
+
+const tableSectionHeaderStyle: React.CSSProperties = {
+  padding: "18px 20px 12px",
+  display: "flex",
+  flexDirection: "row",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: 12,
+};
+
+const tableSectionLabelStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: "0.08em",
+  color: "var(--text-secondary)",
+};
+
+const tableSectionCountStyle: React.CSSProperties = {
+  marginTop: 2,
+  fontSize: 12,
+  color: "var(--text-muted)",
+};
+
+const outlineButtonStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  padding: "4px 10px",
+  borderRadius: 8,
+  border: "1.5px solid var(--border-color)",
+  background: "var(--button-secondary-bg)",
+  color: "var(--text-primary)",
+  fontSize: 12,
+  fontWeight: 700,
+  letterSpacing: "0.04em",
+  whiteSpace: "nowrap",
+};
+
+const triggerCountPillStyle: React.CSSProperties = {
+  background: "var(--selected-bg)",
+  color: "var(--accent)",
+  borderRadius: 5,
+  padding: "1px 6px",
+  fontSize: 10.5,
+  fontWeight: 700,
+};
+
+const modernTableStyle: React.CSSProperties = {
+  borderRadius: 12,
+  border: "1px solid var(--border-color)",
+  overflow: "hidden",
+};
+
+const modernGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "44px 1fr 160px 90px",
+  alignItems: "center",
+};
+
+const modernHeaderRowStyle: React.CSSProperties = {
+  ...modernGridStyle,
+  background: "var(--grid-header-bg)",
+};
+
+const modernHeaderCellStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  fontSize: 11.5,
+  fontWeight: 700,
+  letterSpacing: "0.04em",
+  color: "var(--text-muted)",
+  whiteSpace: "nowrap",
+};
+
+const modernDataRowStyle: React.CSSProperties = {
+  ...modernGridStyle,
+  borderTop: "1px solid var(--border-subtle)",
+};
+
+const modernCellStyle: React.CSSProperties = {
+  padding: "7px 12px",
+  fontSize: 12,
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const modernIndexCellStyle: React.CSSProperties = {
+  ...modernCellStyle,
+  color: "var(--text-muted)",
+};
+
+const modernNameCellStyle: React.CSSProperties = {
+  ...modernCellStyle,
+  fontWeight: 700,
+  color: "var(--text-primary)",
+};
+
+const modernTypeCellStyle: React.CSSProperties = {
+  ...modernCellStyle,
+  fontFamily: "var(--font-mono)",
+  color: "var(--accent)",
+};
+
+const modernNullableCellStyle: React.CSSProperties = {
+  ...modernCellStyle,
+  color: "var(--warning)",
 };
 
 const scrollSectionStyle: React.CSSProperties = {

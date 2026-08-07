@@ -27,6 +27,7 @@ import type {
   ColumnInfo,
   TransactionState,
   PrimaryKeyDetail,
+  TableTriggerInfo,
   ConstraintDetail,
   SearchColumnsRequest,
   SqlColumnSuggestion,
@@ -38,6 +39,7 @@ import {
   listObjectsSql,
   getSourceCodeSql,
   getTableColumnsSql,
+  getTableTriggersSql,
   getTableDdlSql,
   getViewColumnsSql,
   getViewDdlSql,
@@ -729,9 +731,10 @@ export class OracleRepository implements DatabaseRepository {
   }
 
   private async fetchTableDetail(conn: Connection, name: string): Promise<ObjectDetailResponse> {
-    const [columnResult, primaryKey] = await Promise.all([
+    const [columnResult, primaryKey, triggers] = await Promise.all([
       conn.execute(getTableColumnsSql(name), {}, { outFormat: oracledb.OUT_FORMAT_OBJECT }),
       this.getTablePrimaryKey(conn, name),
+      this.getTableTriggers(conn, name),
     ]);
     const rows = (columnResult.rows ?? []) as Array<{
       COLUMN_NAME: string; DATA_TYPE: string; DATA_LENGTH: number;
@@ -746,7 +749,28 @@ export class OracleRepository implements DatabaseRepository {
       position: r.COLUMN_ID,
     }));
 
-    return { kind: "table", objectName: name, columns, primaryKey };
+    return { kind: "table", objectName: name, columns, primaryKey, triggers };
+  }
+
+  private async getTableTriggers(conn: Connection, tableName: string): Promise<TableTriggerInfo[]> {
+    const result = await conn.execute(
+      getTableTriggersSql(tableName),
+      {},
+      { outFormat: oracledb.OUT_FORMAT_OBJECT },
+    );
+
+    const rows = (result.rows ?? []) as Array<{
+      TRIGGER_NAME: string;
+      TRIGGER_TYPE: string | null;
+      TRIGGERING_EVENT: string | null;
+      STATUS: string | null;
+    }>;
+
+    return rows.map((r) => ({
+      name: r.TRIGGER_NAME,
+      event: formatTriggerEvent(r.TRIGGER_TYPE, r.TRIGGERING_EVENT),
+      status: r.STATUS === "DISABLED" ? "DISABLED" : "ENABLED",
+    }));
   }
 
   private async fetchTableSql(conn: Connection, name: string): Promise<string> {
@@ -1123,6 +1147,25 @@ export class OracleRepository implements DatabaseRepository {
 
     return result.rowsAffected ?? 0;
   }
+}
+
+/**
+ * Formata o evento de uma trigger para exibição, ex: "BEFORE INSERT OR UPDATE".
+ * O timing (BEFORE/AFTER/INSTEAD OF) vem de TRIGGER_TYPE, que também traz
+ * "EACH ROW"/"STATEMENT" — descartado aqui por não interessar ao resumo.
+ */
+function formatTriggerEvent(triggerType: string | null, triggeringEvent: string | null): string {
+  const event = (triggeringEvent ?? "").trim();
+  const type = (triggerType ?? "").trim().toUpperCase();
+  const timing = type.startsWith("INSTEAD OF")
+    ? "INSTEAD OF"
+    : type.startsWith("AFTER")
+      ? "AFTER"
+      : type.startsWith("BEFORE")
+        ? "BEFORE"
+        : "";
+
+  return [timing, event].filter(Boolean).join(" ") || "—";
 }
 
 /** Formata o tipo de dado de uma coluna para exibição */

@@ -77,6 +77,21 @@ export function getTableColumnsSql(name: string): string {
   `;
 }
 
+/** SQL para buscar as triggers associadas a uma tabela (metadados, sem corpo) */
+export function getTableTriggersSql(name: string): string {
+  return `
+    SELECT
+      trigger_name,
+      trigger_type,
+      triggering_event,
+      status
+    FROM all_triggers
+    WHERE table_name = '${escapeSqlLiteral(name)}'
+      AND table_owner = SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA')
+    ORDER BY trigger_name
+  `;
+}
+
 /** SQL para buscar colunas de uma view */
 export function getViewColumnsSql(name: string): string {
   return `

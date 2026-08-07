@@ -8,6 +8,7 @@ export type {
   ConstraintColumnInfo,
   PrimaryKeyDetail,
   TableDetail,
+  TableTriggerInfo,
   ViewDetail,
   DbObjectType,
   ObjectSourceTab,
