@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { DatabaseObjectType, DatabaseObjectSummary } from "@gavadb/types";
+import { parsePackageMembers, type PackageMember } from "@gavadb/utils";
 
 const OBJECT_TYPES: readonly DatabaseObjectType[] = [
   "tables",
@@ -12,6 +13,20 @@ const OBJECT_TYPES: readonly DatabaseObjectType[] = [
 
 type ObjectIndex = Map<string, DatabaseObjectSummary>;
 
+/** Alvo de foco dentro do editor de código de um objeto (ex.: linha da
+ *  declaração de um membro de package), retornado quando a referência
+ *  resolvida aponta para um subprograma específico. */
+export interface ResolvedObjectTarget {
+  line: number;
+  part: "spec" | "body";
+}
+
+export interface ResolvedObjectReference {
+  type: DatabaseObjectType;
+  name: string;
+  target?: ResolvedObjectTarget;
+}
+
 function normalizeObjectName(name: string): string {
   const trimmed = name.trim();
   const objectPart = trimmed.includes(".") ? (trimmed.split(".").pop() ?? trimmed) : trimmed;
@@ -21,11 +36,15 @@ function normalizeObjectName(name: string): string {
 export function useObjectResolver(isConnected: boolean) {
   const cacheRef = useRef<Partial<Record<DatabaseObjectType, ObjectIndex>>>({});
   const pendingRef = useRef<Partial<Record<DatabaseObjectType, Promise<ObjectIndex>>>>({});
+  const packageMembersCacheRef = useRef<Map<string, PackageMember[]>>(new Map());
+  const packageMembersPendingRef = useRef<Map<string, Promise<PackageMember[]>>>(new Map());
 
   useEffect(() => {
     if (!isConnected) {
       cacheRef.current = {};
       pendingRef.current = {};
+      packageMembersCacheRef.current = new Map();
+      packageMembersPendingRef.current = new Map();
     }
   }, [isConnected]);
 
@@ -58,7 +77,60 @@ export function useObjectResolver(isConnected: boolean) {
     return request;
   }, []);
 
-  const resolveObject = useCallback(async (name: string) => {
+  // Subprogramas (functions/procedures) declarados no corpo de um package —
+  // usado para localizar a linha exata de "PKG.MEMBRO" ao resolver a
+  // referência clicada (navegação encadeada Ctrl+Click estilo Go to Definition).
+  const loadPackageMembers = useCallback(async (packageName: string): Promise<PackageMember[]> => {
+    const cached = packageMembersCacheRef.current.get(packageName);
+    if (cached) return cached;
+
+    const pending = packageMembersPendingRef.current.get(packageName);
+    if (pending) return pending;
+
+    const request = window.gavadb.dbGetSource("packages", packageName).then((result) => {
+      const bodySource = result.success && result.data.kind === "source"
+        ? result.data.tabs.find((tab) => tab.id === "body")?.source ?? ""
+        : "";
+      const members = parsePackageMembers(bodySource);
+      packageMembersCacheRef.current.set(packageName, members);
+      packageMembersPendingRef.current.delete(packageName);
+      return members;
+    }).catch(() => {
+      packageMembersPendingRef.current.delete(packageName);
+      return [];
+    });
+
+    packageMembersPendingRef.current.set(packageName, request);
+    return request;
+  }, []);
+
+  const resolveObject = useCallback(async (name: string): Promise<ResolvedObjectReference | null> => {
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+
+    // Referência qualificada (ex.: PKG_ARRECADACAO.SP_FATURA): se o
+    // qualificador for um package conhecido, localiza o membro no corpo dele
+    // para focar diretamente na declaração, em vez de apenas abrir o package.
+    const dotIndex = trimmed.lastIndexOf(".");
+    if (dotIndex > 0) {
+      const qualifierNormalized = normalizeObjectName(trimmed.slice(0, dotIndex));
+      const memberNormalized = normalizeObjectName(trimmed.slice(dotIndex + 1));
+
+      if (qualifierNormalized && memberNormalized) {
+        const packagesIndex = await loadType("packages");
+        const pkgMatch = packagesIndex.get(qualifierNormalized);
+        if (pkgMatch) {
+          const members = await loadPackageMembers(pkgMatch.name);
+          const member = members.find((item) => normalizeObjectName(item.name) === memberNormalized);
+          return {
+            type: "packages",
+            name: pkgMatch.name,
+            target: member ? { line: member.line, part: "body" } : undefined,
+          };
+        }
+      }
+    }
+
     const normalized = normalizeObjectName(name);
     if (!normalized) return null;
 
@@ -79,7 +151,7 @@ export function useObjectResolver(isConnected: boolean) {
     }
 
     return null;
-  }, [loadType]);
+  }, [loadPackageMembers, loadType]);
 
   return { resolveObject };
 }

@@ -27,7 +27,7 @@ interface QueryEditorPaneProps {
   resultSplitRatio: number;
   onResultSplitRatioChange: (ratio: number) => void;
   onUpdateTab: (tabId: string, patch: Partial<QueryTabState>) => void;
-  onOpenObject: (type: DatabaseObjectType, name: string) => void;
+  onOpenObject: (type: DatabaseObjectType, name: string, target?: { line: number; part?: "spec" | "body" }) => void;
   onCloseActiveTab: () => void;
 }
 
@@ -514,7 +514,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
     try {
       const resolved = await resolveObject(name);
       if (!resolved) return;
-      onOpenObject(resolved.type, resolved.name);
+      onOpenObject(resolved.type, resolved.name, resolved.target);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
     }

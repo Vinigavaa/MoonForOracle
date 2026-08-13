@@ -276,7 +276,15 @@ function showGoToLineDialog(view: EditorView) {
   const close = () => { wrapper.remove(); view.focus(); };
 
   input.addEventListener("keydown", (e) => {
+    // preventDefault + stopPropagation são essenciais aqui: close() move o
+    // foco de volta para o editor (view.focus()) de forma síncrona, ainda
+    // dentro deste mesmo keydown. Sem prevenir o evento, o navegador aplica a
+    // ação padrão do Enter (inserir quebra de linha) no elemento que acabou
+    // de ganhar foco — o CodeMirror — inserindo um Enter real no código e
+    // marcando o objeto como modificado.
     if (e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
       const lineNum = parseInt(input.value, 10);
       if (lineNum >= 1 && lineNum <= view.state.doc.lines) {
         const line = view.state.doc.line(lineNum);
@@ -287,7 +295,11 @@ function showGoToLineDialog(view: EditorView) {
       }
       close();
     }
-    if (e.key === "Escape") close();
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+    }
   });
 
   wrapper.appendChild(label);

@@ -486,7 +486,7 @@ export const QueryWorkspace = forwardRef<QueryWorkspaceHandle, QueryWorkspacePro
           onTabDrop={(payload, position) => handleTabDrop(payload, group.id, position)}
           onDragStart={setDragState}
           onDragEnd={() => setDragState(null)}
-          onOpenObject={(type, name) => openObjectTab(group.id, "object", type, name)}
+          onOpenObject={(type, name, target) => openObjectTab(group.id, "object", type, name, target)}
           onOpenObjectSql={(type, name) => openObjectTab(group.id, "object-sql", type, name)}
         />
       </div>

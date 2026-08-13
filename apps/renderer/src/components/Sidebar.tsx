@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Blocks, ChevronDown, DatabaseZap, FolderCode, Globe, Menu, Package, PackageSearch, Play, Plug, Table, type LucideIcon } from "lucide-react";
+import { Blocks, ChevronDown, DatabaseZap, FolderCode, Globe, Menu, Package, PackageSearch, Play, Plug, Table, Trash2, type LucideIcon } from "lucide-react";
 import type { DatabaseObjectType, DatabaseObjectSummary, SavedConnection, WorkspaceReadFileResponse } from "@gavadb/types";
 import type { PackageMember } from "@gavadb/utils";
 import { useObjectList, type SectionState } from "../hooks/useObjectList";
@@ -255,6 +255,7 @@ function SavedConnectionsSection({
 }: SavedConnectionsSectionProps) {
   const [detailsOpenId, setDetailsOpenId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const detailsRef = useRef<HTMLDivElement>(null);
 
   // Close details popover when clicking outside
@@ -291,10 +292,14 @@ function SavedConnectionsSection({
               const isActive = activeConnectionId === conn.id && isConnected;
               const isThisConnecting = connectingId === conn.id;
               const isDetailsOpen = detailsOpenId === conn.id;
+              const isConfirmingInline = confirmDeleteId === conn.id && !isDetailsOpen;
+              const showRowActions = hoveredId === conn.id || isConfirmingInline;
 
               return (
                 <div key={conn.id} style={{ position: "relative" }}>
                   <div
+                    onMouseEnter={() => setHoveredId(conn.id)}
+                    onMouseLeave={() => setHoveredId((current) => (current === conn.id ? null : current))}
                     onContextMenu={(event) => {
                       event.preventDefault();
                       setDetailsOpenId(isDetailsOpen ? null : conn.id);
@@ -331,20 +336,50 @@ function SavedConnectionsSection({
                     </span>
 
                     {/* Action buttons */}
-                    {isActive ? (
-                      <span style={{ fontSize: 10, color: "var(--status-connected)", fontWeight: 600, flexShrink: 0 }}>
-                        {"\u2022"} Active
-                      </span>
+                    {isConfirmingInline ? (
+                      <>
+                        <span style={{ fontSize: 10, color: "var(--danger)", flexShrink: 0 }}>Delete?</span>
+                        <button
+                          onClick={() => { onDelete(conn.id, conn.friendlyName); setConfirmDeleteId(null); }}
+                          style={{ ...inlineConfirmBtnStyle, color: "var(--danger)", borderColor: "var(--danger)" }}
+                          title={`Delete "${conn.friendlyName}"`}
+                        >
+                          Yes
+                        </button>
+                        <button onClick={() => setConfirmDeleteId(null)} style={inlineConfirmBtnStyle} title="Cancel">
+                          No
+                        </button>
+                      </>
                     ) : (
-                      <button
-                        onClick={() => onQuickConnect(conn.id)}
-                        disabled={isThisConnecting}
-                        style={{ ...sidebarIconBtnStyle, opacity: isThisConnecting ? 0.5 : 1 }}
-                        title={isThisConnecting ? "Connecting..." : "Connect"}
-                        aria-label="Connect"
-                      >
-                        <Plug size={13} strokeWidth={1.9} />
-                      </button>
+                      <>
+                        {isActive ? (
+                          <span style={{ fontSize: 10, color: "var(--status-connected)", fontWeight: 600, flexShrink: 0 }}>
+                            {"\u2022"} Active
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => onQuickConnect(conn.id)}
+                            disabled={isThisConnecting}
+                            style={{ ...sidebarIconBtnStyle, opacity: isThisConnecting ? 0.5 : 1 }}
+                            title={isThisConnecting ? "Connecting..." : "Connect"}
+                            aria-label="Connect"
+                          >
+                            <Plug size={13} strokeWidth={1.9} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => { setDetailsOpenId(null); setConfirmDeleteId(conn.id); }}
+                          style={{
+                            ...sidebarIconBtnStyle,
+                            color: "var(--danger)",
+                            visibility: showRowActions ? "visible" : "hidden",
+                          }}
+                          title="Delete connection"
+                          aria-label={`Delete connection ${conn.friendlyName}`}
+                        >
+                          <Trash2 size={13} strokeWidth={1.9} />
+                        </button>
+                      </>
                     )}
                   </div>
 
@@ -457,6 +492,17 @@ const sidebarIconBtnStyle: React.CSSProperties = {
   padding: 0,
   background: "transparent",
   border: "none",
+  color: "var(--text-secondary)",
+  cursor: "pointer",
+  flexShrink: 0,
+};
+
+const inlineConfirmBtnStyle: React.CSSProperties = {
+  fontSize: 10,
+  padding: "1px 6px",
+  background: "transparent",
+  border: "1px solid var(--border-color)",
+  borderRadius: "var(--radius)",
   color: "var(--text-secondary)",
   cursor: "pointer",
   flexShrink: 0,

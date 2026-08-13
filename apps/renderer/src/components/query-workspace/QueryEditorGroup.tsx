@@ -32,7 +32,7 @@ interface QueryEditorGroupProps {
   onTabDrop: (payload: QueryTabDragData, position: QueryDropPosition) => void;
   onDragStart: (payload: QueryTabDragData) => void;
   onDragEnd: () => void;
-  onOpenObject: (type: DatabaseObjectType, name: string) => void;
+  onOpenObject: (type: DatabaseObjectType, name: string, target?: { line: number; part?: "spec" | "body" }) => void;
   onOpenObjectSql: (type: DatabaseObjectType, name: string) => void;
 }
 
@@ -231,7 +231,7 @@ function renderTabContent({
   resultSplitRatio: number;
   onResultSplitRatioChange: (ratio: number) => void;
   onUpdateTab: (tabId: string, patch: Partial<QueryTabState>) => void;
-  onOpenObject: (type: DatabaseObjectType, name: string) => void;
+  onOpenObject: (type: DatabaseObjectType, name: string, target?: { line: number; part?: "spec" | "body" }) => void;
   onOpenObjectSql: (type: DatabaseObjectType, name: string) => void;
   onTabClose: (tabId: string) => void;
   groupTabCount: number;
@@ -280,6 +280,7 @@ function renderTabContent({
           objectType={tab.objectType}
           objectName={tab.objectName}
           activeConnectionId={tab.connectionId ?? activeConnectionId}
+          isConnected={isConnected}
           navTarget={tab.navTarget}
           onViewSql={onOpenObjectSql}
           onOpenObject={onOpenObject}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CompileError, CompileObjectRequest, ObjectSourceTab, SourceDetail } from "@gavadb/types";
+import type { CompileError, CompileObjectRequest, DatabaseObjectType, ObjectSourceTab, SourceDetail } from "@gavadb/types";
+import { useObjectResolver } from "../hooks/useObjectResolver";
 import { useToastContext } from "../hooks/ToastContext";
 import { ObjectEditorHeader } from "./ObjectEditorHeader";
 import { SqlCodeEditor, type SqlCodeEditorHandle } from "./SqlCodeEditor";
@@ -8,7 +9,9 @@ import type { ObjectNavigationTarget } from "./query-workspace/queryWorkspaceTyp
 interface ObjectEditorContainerProps {
   detail: SourceDetail;
   connectionId: string | null;
+  isConnected?: boolean;
   navTarget?: ObjectNavigationTarget | null;
+  onOpenObject?: (type: DatabaseObjectType, name: string, target?: { line: number; part?: "spec" | "body" }) => void;
 }
 
 interface EditableSourceTabState extends ObjectSourceTab {
@@ -18,12 +21,37 @@ interface EditableSourceTabState extends ObjectSourceTab {
   compiling: boolean;
 }
 
-export function ObjectEditorContainer({ detail, connectionId, navTarget = null }: ObjectEditorContainerProps) {
+export function ObjectEditorContainer({ detail, connectionId, isConnected = false, navTarget = null, onOpenObject }: ObjectEditorContainerProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [tabs, setTabs] = useState<EditableSourceTabState[]>(() => createEditableTabs(detail.tabs));
   const [activeTabId, setActiveTabId] = useState(() => resolveDefaultActiveTabId(detail.tabs));
   const editorRef = useRef<SqlCodeEditorHandle | null>(null);
   const toast = useToastContext();
+  const { resolveObject } = useObjectResolver(isConnected);
+
+  // Ctrl+Click dentro do código-fonte: resolve a referência (ex.:
+  // PKG_OUTRA.PROCESSAR_DADOS) e abre em nova aba, focando direto no membro —
+  // permite navegação encadeada de package em package, como Go to Definition.
+  const handleOpenObjectReference = useCallback(async (name: string) => {
+    if (!isConnected) return;
+    try {
+      const resolved = await resolveObject(name);
+      if (!resolved) return;
+      onOpenObject?.(resolved.type, resolved.name, resolved.target);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    }
+  }, [isConnected, onOpenObject, resolveObject, toast]);
+
+  const handleCanOpenObjectReference = useCallback(async (name: string) => {
+    if (!isConnected) return false;
+    try {
+      const resolved = await resolveObject(name);
+      return Boolean(resolved);
+    } catch {
+      return false;
+    }
+  }, [isConnected, resolveObject]);
 
   useEffect(() => {
     setTabs(createEditableTabs(detail.tabs));
@@ -31,9 +59,14 @@ export function ObjectEditorContainer({ detail, connectionId, navTarget = null }
   }, [detail]);
 
   // Navegação até um membro: troca para a parte alvo (ex.: body) e rola até a
-  // linha da declaração. Roda também quando `detail` acaba de carregar (open
-  // assíncrono) e a cada novo token (re-clique no mesmo membro). O rAF garante
-  // que o CodeMirror já sincronizou o texto da parte ativa antes do focusLine.
+  // linha da declaração. Dispara *apenas* quando `navTarget.token` muda (novo
+  // clique no Navigator/Ctrl+Click) — nunca por causa de `tabs` mudando. Os
+  // tabs são lidos da closure (já carregados de forma síncrona a partir de
+  // `detail` antes deste componente montar), não entram nas deps: colocá-los
+  // ali fazia o efeito reagir a toda tecla digitada (onChange -> setTabs),
+  // reagendando o rAF de `focusLine` e prendendo o cursor de volta na
+  // declaração do membro — inclusive sobrepondo um Ctrl+G feito logo depois,
+  // já que o rAF antigo ficava pendente e disparava no frame seguinte.
   useEffect(() => {
     if (!navTarget) return;
     if (!tabs.some((tab) => tab.id === navTarget.part)) return;
@@ -44,7 +77,7 @@ export function ObjectEditorContainer({ detail, connectionId, navTarget = null }
     });
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navTarget?.token, tabs]);
+  }, [navTarget?.token]);
 
   const activeTab = useMemo(
     () => tabs.find((tab) => tab.id === activeTabId) ?? tabs[0] ?? null,
@@ -153,6 +186,8 @@ export function ObjectEditorContainer({ detail, connectionId, navTarget = null }
             ref={editorRef}
             value={activeTab.currentSource}
             onChange={(value) => updateActiveTab({ currentSource: value })}
+            onOpenObject={handleOpenObjectReference}
+            onCanOpenObject={handleCanOpenObjectReference}
             placeholder="Source code"
             showScopeLines={false}
           />

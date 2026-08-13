@@ -14,9 +14,10 @@ interface ObjectViewerProps {
   objectType: DatabaseObjectType;
   objectName: string;
   activeConnectionId?: string | null;
+  isConnected?: boolean;
   navTarget?: ObjectNavigationTarget | null;
   onViewSql?: (type: DatabaseObjectType, name: string) => void;
-  onOpenObject?: (type: DatabaseObjectType, name: string) => void;
+  onOpenObject?: (type: DatabaseObjectType, name: string, target?: { line: number; part?: "spec" | "body" }) => void;
 }
 
 const TYPE_LABELS: Record<DatabaseObjectType, string> = {
@@ -41,7 +42,7 @@ const TYPE_COLORS: Record<DatabaseObjectType, string> = {
   ckcs: "var(--info)",
 };
 
-export function ObjectViewer({ objectType, objectName, activeConnectionId = null, navTarget = null, onViewSql, onOpenObject }: ObjectViewerProps) {
+export function ObjectViewer({ objectType, objectName, activeConnectionId = null, isConnected = false, navTarget = null, onViewSql, onOpenObject }: ObjectViewerProps) {
   const { detail, error, loading, reload } = useObjectDetail(objectType, objectName);
   // Tabela tem cabeçalho próprio (seção COLUMNS) — sem badge de tipo nem Reload.
   const showToolbar = detail?.kind !== "source" && detail?.kind !== "table";
@@ -94,7 +95,15 @@ export function ObjectViewer({ objectType, objectName, activeConnectionId = null
             {detail.kind === "table" && <TableView detail={detail} onViewSql={onViewSql} onOpenObject={onOpenObject} />}
             {detail.kind === "view" && <ViewView detail={detail} onViewSql={onViewSql} />}
             {detail.kind === "constraint" && <ConstraintView detail={detail} />}
-            {detail.kind === "source" && <ObjectEditorContainer detail={detail} connectionId={activeConnectionId} navTarget={navTarget} />}
+            {detail.kind === "source" && (
+              <ObjectEditorContainer
+                detail={detail}
+                connectionId={activeConnectionId}
+                isConnected={isConnected}
+                navTarget={navTarget}
+                onOpenObject={onOpenObject}
+              />
+            )}
           </>
         )}
       </div>

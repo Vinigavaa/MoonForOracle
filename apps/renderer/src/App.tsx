@@ -203,6 +203,8 @@ export function App() {
     if (removed) {
       toast.info(`Connection "${name}" deleted`);
       if (activeConnectionId === id) setActiveConnectionId(null);
+    } else {
+      toast.error(`Failed to delete connection "${name}"`);
     }
   }, [activeConnectionId, savedConns, toast]);
 
