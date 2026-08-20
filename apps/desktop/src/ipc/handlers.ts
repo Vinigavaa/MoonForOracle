@@ -25,6 +25,9 @@ import type {
   ThemeDuplicateRequest,
   ThemeSetDefaultRequest,
   ThemeExportRequest,
+  CreateConnectionFolderRequest,
+  RenameConnectionFolderRequest,
+  MoveConnectionRequest,
 } from "@gavadb/types";
 import * as useCases from "../use-cases";
 import { SavedConnectionsStore } from "../lib/saved-connections-store";
@@ -648,6 +651,47 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       return ok(undefined);
     } catch (err) {
       return fail(logIpcError(IPC_CHANNELS.CONN_UPDATE_LAST_USED, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.CONN_LIST_FOLDERS, async () => {
+    try {
+      return ok(savedConnectionsStore.listFolders());
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.CONN_LIST_FOLDERS, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.CONN_CREATE_FOLDER, async (_event, request: CreateConnectionFolderRequest) => {
+    try {
+      return ok(savedConnectionsStore.createFolder(request.name));
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.CONN_CREATE_FOLDER, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.CONN_RENAME_FOLDER, async (_event, request: RenameConnectionFolderRequest) => {
+    try {
+      return ok(savedConnectionsStore.renameFolder(request));
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.CONN_RENAME_FOLDER, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.CONN_DELETE_FOLDER, async (_event, id: string) => {
+    try {
+      savedConnectionsStore.deleteFolder(id);
+      return ok(undefined);
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.CONN_DELETE_FOLDER, err));
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.CONN_MOVE, async (_event, request: MoveConnectionRequest) => {
+    try {
+      return ok(savedConnectionsStore.moveConnection(request));
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.CONN_MOVE, err));
     }
   });
 }

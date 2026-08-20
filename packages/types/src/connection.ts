@@ -60,6 +60,30 @@ export interface SavedConnection {
   createdAt: string;
   /** ISO timestamp of last update */
   updatedAt: string;
+  /** Folder used only to organize the connection in the sidebar. Null/omitted means root. */
+  folderId?: string | null;
+}
+
+/** A user-created folder used to organize saved connections. */
+export interface ConnectionFolder {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateConnectionFolderRequest {
+  name: string;
+}
+
+export interface RenameConnectionFolderRequest {
+  id: string;
+  name: string;
+}
+
+export interface MoveConnectionRequest {
+  connectionId: string;
+  folderId: string | null;
 }
 
 /** Request to create or update a saved connection (password handled separately) */

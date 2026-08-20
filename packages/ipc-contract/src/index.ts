@@ -31,6 +31,10 @@ import type {
   SavedConnection,
   SaveConnectionRequest,
   SavedConnectionWithPassword,
+  ConnectionFolder,
+  CreateConnectionFolderRequest,
+  RenameConnectionFolderRequest,
+  MoveConnectionRequest,
   WorkspaceCreateItemRequest,
   WorkspaceDeleteItemRequest,
   WorkspaceMoveItemRequest,
@@ -93,6 +97,11 @@ export interface IpcMainHandlers {
   "conn:delete": (id: string) => Promise<IpcResult<void>>;
   "conn:toggle-favorite": (id: string) => Promise<IpcResult<SavedConnection>>;
   "conn:update-last-used": (id: string) => Promise<IpcResult<void>>;
+  "conn:list-folders": () => Promise<IpcResult<ConnectionFolder[]>>;
+  "conn:create-folder": (request: CreateConnectionFolderRequest) => Promise<IpcResult<ConnectionFolder>>;
+  "conn:rename-folder": (request: RenameConnectionFolderRequest) => Promise<IpcResult<ConnectionFolder>>;
+  "conn:delete-folder": (id: string) => Promise<IpcResult<void>>;
+  "conn:move": (request: MoveConnectionRequest) => Promise<IpcResult<SavedConnection>>;
   "window:minimize": () => Promise<IpcResult<void>>;
   "window:toggle-maximize": () => Promise<IpcResult<boolean>>;
   "window:close": () => Promise<IpcResult<void>>;
@@ -181,6 +190,11 @@ export const IPC_CHANNELS = {
   CONN_DELETE: "conn:delete",
   CONN_TOGGLE_FAVORITE: "conn:toggle-favorite",
   CONN_UPDATE_LAST_USED: "conn:update-last-used",
+  CONN_LIST_FOLDERS: "conn:list-folders",
+  CONN_CREATE_FOLDER: "conn:create-folder",
+  CONN_RENAME_FOLDER: "conn:rename-folder",
+  CONN_DELETE_FOLDER: "conn:delete-folder",
+  CONN_MOVE: "conn:move",
   WINDOW_MINIMIZE: "window:minimize",
   WINDOW_TOGGLE_MAXIMIZE: "window:toggle-maximize",
   WINDOW_CLOSE: "window:close",
@@ -238,6 +252,11 @@ export interface GavaDbApi {
   connDelete: (id: string) => Promise<IpcResult<void>>;
   connToggleFavorite: (id: string) => Promise<IpcResult<SavedConnection>>;
   connUpdateLastUsed: (id: string) => Promise<IpcResult<void>>;
+  connListFolders: () => Promise<IpcResult<ConnectionFolder[]>>;
+  connCreateFolder: (request: CreateConnectionFolderRequest) => Promise<IpcResult<ConnectionFolder>>;
+  connRenameFolder: (request: RenameConnectionFolderRequest) => Promise<IpcResult<ConnectionFolder>>;
+  connDeleteFolder: (id: string) => Promise<IpcResult<void>>;
+  connMove: (request: MoveConnectionRequest) => Promise<IpcResult<SavedConnection>>;
   windowMinimize: () => Promise<IpcResult<void>>;
   windowToggleMaximize: () => Promise<IpcResult<boolean>>;
   windowClose: () => Promise<IpcResult<void>>;

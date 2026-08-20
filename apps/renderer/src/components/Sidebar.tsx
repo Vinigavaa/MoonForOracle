@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Blocks, ChevronDown, DatabaseZap, FolderCode, Globe, Menu, Package, PackageSearch, Play, Plug, Table, Trash2, type LucideIcon } from "lucide-react";
-import type { DatabaseObjectType, DatabaseObjectSummary, SavedConnection, WorkspaceReadFileResponse } from "@gavadb/types";
+import { Blocks, ChevronDown, DatabaseZap, FolderCode, Globe, Menu, Package, PackageSearch, Pencil, Play, Plug, Table, Trash2, type LucideIcon } from "lucide-react";
+import type { ConnectionFolder, DatabaseObjectType, DatabaseObjectSummary, SavedConnection, WorkspaceReadFileResponse } from "@gavadb/types";
 import type { PackageMember } from "@gavadb/utils";
 import { useObjectList, type SectionState } from "../hooks/useObjectList";
 import { usePackageMembers, type PackageMembersState } from "../hooks/usePackageMembers";
 import { loadSidebarPreferences, saveSidebarPreferences } from "../lib/sidebarPreferences";
+import { loadExpandedConnectionFolders, saveExpandedConnectionFolders } from "../lib/connectionFolderPreferences";
 import { WorkspacePanel } from "./workspace/WorkspacePanel";
 
 type ObjectNavigation = { line: number; part?: "spec" | "body" };
@@ -22,12 +23,17 @@ interface SidebarProps {
   onOpenWorkspaceFile: (file: WorkspaceReadFileResponse) => void;
   activeObject: ActiveEditorObject | null;
   savedConnections: SavedConnection[];
+  connectionFolders: ConnectionFolder[];
   activeConnectionId: string | null;
   connectingId: string | null;
   onQuickConnect: (id: string) => void;
   onEditConnection: (conn: SavedConnection) => void;
   onDeleteConnection: (id: string, name: string) => void;
   onToggleFavorite: (id: string) => void;
+  onCreateConnectionFolder: (name: string) => Promise<boolean>;
+  onRenameConnectionFolder: (id: string, name: string) => Promise<boolean>;
+  onDeleteConnectionFolder: (id: string, name: string) => Promise<boolean>;
+  onMoveSavedConnection: (connectionId: string, folderId: string | null) => Promise<boolean>;
   onToggleCollapse: () => void;
 }
 
@@ -54,12 +60,17 @@ export function Sidebar({
   onOpenWorkspaceFile,
   activeObject,
   savedConnections,
+  connectionFolders,
   activeConnectionId,
   connectingId,
   onQuickConnect,
   onEditConnection,
   onDeleteConnection,
   onToggleFavorite,
+  onCreateConnectionFolder,
+  onRenameConnectionFolder,
+  onDeleteConnectionFolder,
+  onMoveSavedConnection,
   onToggleCollapse,
 }: SidebarProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -153,6 +164,7 @@ export function Sidebar({
       {/* ── Saved Connections section ── */}
       <SavedConnectionsSection
         connections={savedConnections}
+        folders={connectionFolders}
         expanded={connSectionExpanded}
         onToggle={() => setConnSectionExpanded((p) => !p)}
         activeConnectionId={activeConnectionId}
@@ -162,6 +174,10 @@ export function Sidebar({
         onEdit={onEditConnection}
         onDelete={onDeleteConnection}
         onToggleFavorite={onToggleFavorite}
+        onCreateFolder={onCreateConnectionFolder}
+        onRenameFolder={onRenameConnectionFolder}
+        onDeleteFolder={onDeleteConnectionFolder}
+        onMoveConnection={onMoveSavedConnection}
       />
       <WorkspacePanel onOpenFile={onOpenWorkspaceFile} />
 
@@ -230,6 +246,7 @@ export function Sidebar({
 
 interface SavedConnectionsSectionProps {
   connections: SavedConnection[];
+  folders: ConnectionFolder[];
   expanded: boolean;
   onToggle: () => void;
   activeConnectionId: string | null;
@@ -239,10 +256,15 @@ interface SavedConnectionsSectionProps {
   onEdit: (conn: SavedConnection) => void;
   onDelete: (id: string, name: string) => void;
   onToggleFavorite: (id: string) => void;
+  onCreateFolder: (name: string) => Promise<boolean>;
+  onRenameFolder: (id: string, name: string) => Promise<boolean>;
+  onDeleteFolder: (id: string, name: string) => Promise<boolean>;
+  onMoveConnection: (connectionId: string, folderId: string | null) => Promise<boolean>;
 }
 
 function SavedConnectionsSection({
   connections,
+  folders,
   expanded,
   onToggle,
   activeConnectionId,
@@ -252,11 +274,95 @@ function SavedConnectionsSection({
   onEdit,
   onDelete,
   onToggleFavorite,
+  onCreateFolder,
+  onRenameFolder,
+  onDeleteFolder,
+  onMoveConnection,
 }: SavedConnectionsSectionProps) {
   const [detailsOpenId, setDetailsOpenId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [expandedFolderIds, setExpandedFolderIds] = useState(loadExpandedConnectionFolders);
+  const [draggedConnectionId, setDraggedConnectionId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; folder: ConnectionFolder | null } | null>(null);
+  const [folderEditor, setFolderEditor] = useState<
+    { kind: "create"; initialValue: string } | { kind: "rename"; id: string; initialValue: string } | null
+  >(null);
   const detailsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    saveExpandedConnectionFolders(expandedFolderIds);
+  }, [expandedFolderIds]);
+
+  const toggleFolder = useCallback((id: string) => {
+    setExpandedFolderIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const beginCreateFolder = useCallback(() => {
+    setContextMenu(null);
+    if (!expanded) onToggle();
+    setFolderEditor({ kind: "create", initialValue: "" });
+  }, [expanded, onToggle]);
+
+  useEffect(() => {
+    if (!contextMenu) return undefined;
+    const close = () => setContextMenu(null);
+    document.addEventListener("mousedown", close);
+    window.addEventListener("blur", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      window.removeEventListener("blur", close);
+    };
+  }, [contextMenu]);
+
+  const beginRenameFolder = useCallback((folder: ConnectionFolder) => {
+    setContextMenu(null);
+    setFolderEditor({ kind: "rename", id: folder.id, initialValue: folder.name });
+  }, []);
+
+  const commitFolderName = useCallback(async (value: string): Promise<boolean> => {
+    if (!folderEditor) return true;
+    const name = value.trim();
+    if (!name) {
+      setFolderEditor(null);
+      return true;
+    }
+    const saved = folderEditor.kind === "create"
+      ? await onCreateFolder(name)
+      : name === folderEditor.initialValue || await onRenameFolder(folderEditor.id, name);
+    if (saved) setFolderEditor(null);
+    return saved;
+  }, [folderEditor, onCreateFolder, onRenameFolder]);
+
+  const deleteFolder = useCallback(async (folder: ConnectionFolder) => {
+    setContextMenu(null);
+    const count = connections.filter((connection) => connection.folderId === folder.id).length;
+    const message = count > 0
+      ? `Delete folder "${folder.name}"? Its ${count} connection${count === 1 ? "" : "s"} will be moved to the Connections root.`
+      : `Delete empty folder "${folder.name}"?`;
+    if (window.confirm(message)) await onDeleteFolder(folder.id, folder.name);
+  }, [connections, onDeleteFolder]);
+
+  const finishDrag = useCallback(() => {
+    setDraggedConnectionId(null);
+    setDropTarget(null);
+  }, []);
+
+  const dropConnection = useCallback(async (folderId: string | null) => {
+    if (!draggedConnectionId) return;
+    const connection = connections.find((item) => item.id === draggedConnectionId);
+    if ((connection?.folderId ?? null) !== folderId) await onMoveConnection(draggedConnectionId, folderId);
+    if (folderId) {
+      setExpandedFolderIds((current) => new Set(current).add(folderId));
+    }
+    finishDrag();
+  }, [connections, draggedConnectionId, finishDrag, onMoveConnection]);
 
   // Close details popover when clicking outside
   useEffect(() => {
@@ -272,23 +378,129 @@ function SavedConnectionsSection({
   }, [detailsOpenId]);
 
   return (
-    <div>
+    <div style={{ position: "relative" }}>
       <CollapsibleSectionHeader
         label="Connections"
         expanded={expanded}
         count={connections.length || undefined}
         onToggle={onToggle}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          setContextMenu({ x: event.clientX, y: event.clientY, folder: null });
+        }}
       />
 
       {/* Expanded list */}
       {expanded && (
-        <div style={{ maxHeight: 220, overflowY: "auto", paddingBottom: 4 }}>
-          {connections.length === 0 ? (
+        <div style={{ maxHeight: 260, overflowY: "auto", paddingBottom: 4 }}>
+          {connections.length === 0 && folders.length === 0 && !folderEditor ? (
             <div style={{ padding: "6px 12px 6px 30px", fontSize: 11, color: "var(--text-muted)", fontStyle: "italic" }}>
               No saved connections
             </div>
           ) : (
-            connections.map((conn) => {
+            <>
+              {folderEditor?.kind === "create" && (
+                <ConnectionFolderNameInput
+                  initialValue={folderEditor.initialValue}
+                  ariaLabel="Name new connection folder"
+                  onCommit={commitFolderName}
+                  onCancel={() => setFolderEditor(null)}
+                />
+              )}
+              {folders.map((folder) => {
+                const folderConnections = connections.filter((connection) => connection.folderId === folder.id);
+                const folderExpanded = expandedFolderIds.has(folder.id);
+                const isDropTarget = dropTarget === folder.id;
+                return (
+                  <div key={folder.id}>
+                    <div
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setContextMenu({ x: event.clientX, y: event.clientY, folder });
+                      }}
+                      onDragOver={(event) => {
+                        if (!draggedConnectionId) return;
+                        event.preventDefault();
+                        event.stopPropagation();
+                        event.dataTransfer.dropEffect = "move";
+                        setDropTarget(folder.id);
+                      }}
+                      onDragLeave={(event) => {
+                        if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropTarget(null);
+                      }}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void dropConnection(folder.id);
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 5,
+                        minHeight: 28,
+                        padding: "3px 7px 3px 17px",
+                        color: "var(--text-secondary)",
+                        background: isDropTarget ? "var(--selected-bg)" : "transparent",
+                        outline: isDropTarget ? "1px solid var(--accent)" : "1px solid transparent",
+                        outlineOffset: -1,
+                      }}
+                    >
+                      <button onClick={() => toggleFolder(folder.id)} style={{ ...sidebarIconBtnStyle, width: 15, height: 20 }} aria-label={`${folderExpanded ? "Collapse" : "Expand"} ${folder.name}`}>
+                        <ChevronDown size={12} style={{ transform: folderExpanded ? "none" : "rotate(-90deg)", transition: "transform 0.15s" }} />
+                      </button>
+                      {folderEditor?.kind === "rename" && folderEditor.id === folder.id ? (
+                        <ConnectionFolderNameInput
+                          compact
+                          initialValue={folderEditor.initialValue}
+                          ariaLabel={`Rename folder ${folder.name}`}
+                          onCommit={commitFolderName}
+                          onCancel={() => setFolderEditor(null)}
+                        />
+                      ) : (
+                        <button onClick={() => toggleFolder(folder.id)} title={folder.name} style={connectionFolderNameStyle}>{folder.name}</button>
+                      )}
+                      <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{folderConnections.length}</span>
+                    </div>
+                    {folderExpanded && folderConnections.map((conn) => (
+                      <FolderConnectionRow
+                        key={conn.id}
+                        connection={conn}
+                        active={activeConnectionId === conn.id && isConnected}
+                        connecting={connectingId === conn.id}
+                        onQuickConnect={onQuickConnect}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                        onToggleFavorite={onToggleFavorite}
+                        onDragStart={(event) => {
+                          setDraggedConnectionId(conn.id);
+                          event.dataTransfer.effectAllowed = "move";
+                          event.dataTransfer.setData("text/plain", conn.id);
+                        }}
+                        onDragEnd={finishDrag}
+                      />
+                    ))}
+                  </div>
+                );
+              })}
+              {draggedConnectionId && connections.find((connection) => connection.id === draggedConnectionId)?.folderId && (
+                <div
+                  onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDropTarget("root"); }}
+                  onDrop={(event) => { event.preventDefault(); void dropConnection(null); }}
+                  style={{
+                    margin: "4px 8px",
+                    padding: "5px 8px",
+                    border: `1px dashed ${dropTarget === "root" ? "var(--accent)" : "var(--border-color)"}`,
+                    background: dropTarget === "root" ? "var(--selected-bg)" : "transparent",
+                    color: "var(--text-muted)",
+                    fontSize: 10,
+                    textAlign: "center",
+                  }}
+                >
+                  Move to Connections root
+                </div>
+              )}
+              {connections.filter((connection) => !connection.folderId).map((conn) => {
               const isActive = activeConnectionId === conn.id && isConnected;
               const isThisConnecting = connectingId === conn.id;
               const isDetailsOpen = detailsOpenId === conn.id;
@@ -298,6 +510,13 @@ function SavedConnectionsSection({
               return (
                 <div key={conn.id} style={{ position: "relative" }}>
                   <div
+                    draggable
+                    onDragStart={(event) => {
+                      setDraggedConnectionId(conn.id);
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", conn.id);
+                    }}
+                    onDragEnd={finishDrag}
                     onMouseEnter={() => setHoveredId(conn.id)}
                     onMouseLeave={() => setHoveredId((current) => (current === conn.id ? null : current))}
                     onContextMenu={(event) => {
@@ -353,9 +572,7 @@ function SavedConnectionsSection({
                     ) : (
                       <>
                         {isActive ? (
-                          <span style={{ fontSize: 10, color: "var(--status-connected)", fontWeight: 600, flexShrink: 0 }}>
-                            {"\u2022"} Active
-                          </span>
+                          <span title="Active connection" aria-label="Active connection" style={activeConnectionDotStyle} />
                         ) : (
                           <button
                             onClick={() => onQuickConnect(conn.id)}
@@ -448,7 +665,30 @@ function SavedConnectionsSection({
                   )}
                 </div>
               );
-            })
+            })}
+            </>
+          )}
+        </div>
+      )}
+      {contextMenu && (
+        <div
+          style={{ ...connectionsContextMenuStyle, left: contextMenu.x, top: contextMenu.y }}
+          onMouseDown={(event) => event.stopPropagation()}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          {contextMenu.folder ? (
+            <>
+              <button type="button" onClick={() => beginRenameFolder(contextMenu.folder!)} style={connectionsContextMenuButtonStyle}>
+                Rename
+              </button>
+              <button type="button" onClick={() => void deleteFolder(contextMenu.folder!)} style={{ ...connectionsContextMenuButtonStyle, color: "var(--danger)" }}>
+                Delete
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={beginCreateFolder} style={connectionsContextMenuButtonStyle}>
+              New Folder
+            </button>
           )}
         </div>
       )}
@@ -456,19 +696,165 @@ function SavedConnectionsSection({
   );
 }
 
+function FolderConnectionRow({
+  connection,
+  active,
+  connecting,
+  onQuickConnect,
+  onEdit,
+  onDelete,
+  onToggleFavorite,
+  onDragStart,
+  onDragEnd,
+}: {
+  connection: SavedConnection;
+  active: boolean;
+  connecting: boolean;
+  onQuickConnect: (id: string) => void;
+  onEdit: (connection: SavedConnection) => void;
+  onDelete: (id: string, name: string) => void;
+  onToggleFavorite: (id: string) => void;
+  onDragStart: (event: React.DragEvent<HTMLDivElement>) => void;
+  onDragEnd: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  return (
+    <div
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onDoubleClick={() => onEdit(connection)}
+      onContextMenu={(event) => { event.preventDefault(); onEdit(connection); }}
+      title={`${connection.friendlyName} — drag to move; double-click or right-click to edit`}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 4,
+        padding: "4px 8px 4px 38px",
+        background: active ? "var(--selected-bg)" : "transparent",
+        borderLeft: active ? "2px solid var(--status-connected)" : "2px solid transparent",
+        cursor: "grab",
+      }}
+    >
+      <span
+        style={{ fontSize: 11, color: connection.isFavorite ? "var(--warning)" : "var(--text-muted)", cursor: "pointer", flexShrink: 0, lineHeight: 1 }}
+        onClick={() => onToggleFavorite(connection.id)}
+        title={connection.isFavorite ? "Unfavorite" : "Favorite"}
+      >
+        {connection.isFavorite ? "\u2605" : "\u2606"}
+      </span>
+      <span style={{ flex: 1, fontSize: 12, color: active ? "var(--status-connected)" : "var(--text-primary)", fontWeight: active ? 600 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {connection.friendlyName}
+      </span>
+      {confirmingDelete ? (
+        <>
+          <span style={{ fontSize: 10, color: "var(--danger)" }}>Delete?</span>
+          <button onClick={() => { onDelete(connection.id, connection.friendlyName); setConfirmingDelete(false); }} style={{ ...inlineConfirmBtnStyle, color: "var(--danger)", borderColor: "var(--danger)" }}>Yes</button>
+          <button onClick={() => setConfirmingDelete(false)} style={inlineConfirmBtnStyle}>No</button>
+        </>
+      ) : active ? (
+        <span title="Active connection" aria-label="Active connection" style={activeConnectionDotStyle} />
+      ) : (
+        <>
+          <button onClick={() => onQuickConnect(connection.id)} disabled={connecting} style={{ ...sidebarIconBtnStyle, opacity: connecting ? 0.5 : 1 }} title={connecting ? "Connecting..." : "Connect"} aria-label="Connect">
+            <Plug size={13} strokeWidth={1.9} />
+          </button>
+          <button onClick={() => onEdit(connection)} style={{ ...sidebarIconBtnStyle, visibility: hovered ? "visible" : "hidden" }} title="Edit connection" aria-label={`Edit connection ${connection.friendlyName}`}>
+            <Pencil size={12} />
+          </button>
+          <button onClick={() => setConfirmingDelete(true)} style={{ ...sidebarIconBtnStyle, color: "var(--danger)", visibility: hovered ? "visible" : "hidden" }} title="Delete connection" aria-label={`Delete connection ${connection.friendlyName}`}>
+            <Trash2 size={13} strokeWidth={1.9} />
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ConnectionFolderNameInput({
+  initialValue,
+  ariaLabel,
+  compact = false,
+  onCommit,
+  onCancel,
+}: {
+  initialValue: string;
+  ariaLabel: string;
+  compact?: boolean;
+  onCommit: (value: string) => Promise<boolean>;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(initialValue);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const finishingRef = useRef(false);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  const finish = useCallback(async (cancel = false) => {
+    if (finishingRef.current) return;
+    finishingRef.current = true;
+    if (cancel) {
+      onCancel();
+      return;
+    }
+    const saved = await onCommit(value);
+    if (!saved) {
+      finishingRef.current = false;
+      window.setTimeout(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }, 0);
+    }
+  }, [onCancel, onCommit, value]);
+
+  const input = (
+    <input
+      ref={inputRef}
+      value={value}
+      aria-label={ariaLabel}
+      placeholder="Folder name"
+      onChange={(event) => setValue(event.target.value)}
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          void finish();
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          finish(true);
+        }
+      }}
+      onBlur={() => void finish()}
+      style={connectionFolderInputStyle}
+    />
+  );
+
+  if (compact) return input;
+  return <div style={newConnectionFolderRowStyle}>{input}</div>;
+}
+
 function CollapsibleSectionHeader({
   label,
   expanded,
   onToggle,
   count,
+  onContextMenu,
 }: {
   label: string;
   expanded: boolean;
   onToggle: () => void;
   count?: number;
+  onContextMenu?: (event: React.MouseEvent<HTMLButtonElement>) => void;
 }) {
   return (
-    <button onClick={onToggle} style={collapsibleSectionHeaderStyle}>
+    <button onClick={onToggle} onContextMenu={onContextMenu} style={collapsibleSectionHeaderStyle}>
       <span
         style={{
           ...collapsibleSectionChevronStyle,
@@ -495,6 +881,76 @@ const sidebarIconBtnStyle: React.CSSProperties = {
   color: "var(--text-secondary)",
   cursor: "pointer",
   flexShrink: 0,
+};
+
+const activeConnectionDotStyle: React.CSSProperties = {
+  width: 8,
+  height: 8,
+  flexShrink: 0,
+  background: "var(--status-connected)",
+  borderRadius: "50%",
+};
+
+const connectionFolderNameStyle: React.CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  padding: 0,
+  overflow: "hidden",
+  background: "transparent",
+  border: "none",
+  color: "var(--text-secondary)",
+  fontFamily: "var(--font-ui)",
+  fontSize: 11,
+  fontWeight: 600,
+  textAlign: "left",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  cursor: "pointer",
+};
+
+const newConnectionFolderRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  minHeight: 28,
+  padding: "3px 49px 3px 37px",
+};
+
+const connectionFolderInputStyle: React.CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  height: 22,
+  padding: "2px 5px",
+  background: "var(--panel-bg)",
+  border: "1px solid var(--accent)",
+  borderRadius: 3,
+  outline: "none",
+  color: "var(--text-primary)",
+  fontFamily: "var(--font-ui)",
+  fontSize: 11,
+};
+
+const connectionsContextMenuStyle: React.CSSProperties = {
+  position: "fixed",
+  zIndex: 300,
+  minWidth: 150,
+  padding: 4,
+  background: "var(--popup-bg)",
+  border: "1px solid var(--border-color)",
+  borderRadius: 5,
+  boxShadow: "0 8px 24px rgba(0, 0, 0, 0.35)",
+};
+
+const connectionsContextMenuButtonStyle: React.CSSProperties = {
+  width: "100%",
+  padding: "6px 10px",
+  background: "transparent",
+  border: "none",
+  borderRadius: 3,
+  color: "var(--text-primary)",
+  fontFamily: "var(--font-ui)",
+  fontSize: 12,
+  textAlign: "left",
+  cursor: "pointer",
 };
 
 const inlineConfirmBtnStyle: React.CSSProperties = {

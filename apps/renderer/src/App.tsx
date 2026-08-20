@@ -208,6 +208,31 @@ export function App() {
     }
   }, [activeConnectionId, savedConns, toast]);
 
+  const handleCreateConnectionFolder = useCallback(async (name: string) => {
+    const created = await savedConns.createFolder(name);
+    if (!created) toast.error(`Failed to create folder "${name}"`);
+    return created;
+  }, [savedConns, toast]);
+
+  const handleRenameConnectionFolder = useCallback(async (id: string, name: string) => {
+    const renamed = await savedConns.renameFolder(id, name);
+    if (!renamed) toast.error(`Failed to rename folder to "${name}"`);
+    return renamed;
+  }, [savedConns, toast]);
+
+  const handleDeleteConnectionFolder = useCallback(async (id: string, name: string) => {
+    const removed = await savedConns.deleteFolder(id);
+    if (removed) toast.info(`Folder "${name}" deleted; its connections were moved to the root`);
+    else toast.error(`Failed to delete folder "${name}"`);
+    return removed;
+  }, [savedConns, toast]);
+
+  const handleMoveSavedConnection = useCallback(async (connectionId: string, folderId: string | null) => {
+    const moved = await savedConns.moveConnection(connectionId, folderId);
+    if (!moved) toast.error("Failed to move connection");
+    return moved;
+  }, [savedConns, toast]);
+
   const handleCloseModal = useCallback(() => {
     if (!isConnecting) {
       setShowConnModal(false);
@@ -327,12 +352,17 @@ export function App() {
           onOpenWorkspaceFile={handleOpenWorkspaceFile}
           activeObject={activeObject}
           savedConnections={savedConns.connections}
+          connectionFolders={savedConns.folders}
           activeConnectionId={activeConnectionId}
           connectingId={connectingId}
           onQuickConnect={handleQuickConnect}
           onEditConnection={handleEditSavedConnection}
           onDeleteConnection={handleDeleteSavedConnection}
           onToggleFavorite={savedConns.toggleFavorite}
+          onCreateConnectionFolder={handleCreateConnectionFolder}
+          onRenameConnectionFolder={handleRenameConnectionFolder}
+          onDeleteConnectionFolder={handleDeleteConnectionFolder}
+          onMoveSavedConnection={handleMoveSavedConnection}
           onToggleCollapse={() => setSidebarCollapsed((current) => !current)}
         />
 

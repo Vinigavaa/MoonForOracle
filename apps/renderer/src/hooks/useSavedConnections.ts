@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
-import type { SavedConnection, SaveConnectionRequest, SavedConnectionWithPassword } from "@gavadb/types";
+import type { ConnectionFolder, SavedConnection, SaveConnectionRequest, SavedConnectionWithPassword } from "@gavadb/types";
 
 export function useSavedConnections() {
   const [connections, setConnections] = useState<SavedConnection[]>([]);
+  const [folders, setFolders] = useState<ConnectionFolder[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     try {
-      const result = await window.gavadb.connListSaved();
-      if (result.success) {
-        setConnections(result.data);
-      }
+      const [connectionsResult, foldersResult] = await Promise.all([
+        window.gavadb.connListSaved(),
+        window.gavadb.connListFolders(),
+      ]);
+      if (connectionsResult.success) setConnections(connectionsResult.data);
+      if (foldersResult.success) setFolders(foldersResult.data);
     } finally {
       setLoading(false);
     }
@@ -56,8 +59,37 @@ export function useSavedConnections() {
     await refresh();
   }, [refresh]);
 
+  const createFolder = useCallback(async (name: string): Promise<boolean> => {
+    const result = await window.gavadb.connCreateFolder({ name });
+    if (!result.success) return false;
+    await refresh();
+    return true;
+  }, [refresh]);
+
+  const renameFolder = useCallback(async (id: string, name: string): Promise<boolean> => {
+    const result = await window.gavadb.connRenameFolder({ id, name });
+    if (!result.success) return false;
+    await refresh();
+    return true;
+  }, [refresh]);
+
+  const deleteFolder = useCallback(async (id: string): Promise<boolean> => {
+    const result = await window.gavadb.connDeleteFolder(id);
+    if (!result.success) return false;
+    await refresh();
+    return true;
+  }, [refresh]);
+
+  const moveConnection = useCallback(async (connectionId: string, folderId: string | null): Promise<boolean> => {
+    const result = await window.gavadb.connMove({ connectionId, folderId });
+    if (!result.success) return false;
+    await refresh();
+    return true;
+  }, [refresh]);
+
   return {
     connections,
+    folders,
     loading,
     refresh,
     save,
@@ -65,5 +97,9 @@ export function useSavedConnections() {
     toggleFavorite,
     getWithPassword,
     updateLastUsed,
+    createFolder,
+    renameFolder,
+    deleteFolder,
+    moveConnection,
   };
 }
