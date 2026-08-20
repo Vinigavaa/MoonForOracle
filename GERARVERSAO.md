@@ -1,69 +1,58 @@
-1. Instale a 0.1.0
-Primeiro instale o app usando o executável que você baixou da release v0.1.0:
+# Geração automática de versões
 
-MoonForOracle-0.1.0-win-x64.exe
+As versões do Moon for Oracle são preparadas pelo Release Please e publicadas pelo GitHub Actions.
+Não é mais necessário alterar a versão, criar tags, gerar o instalador ou anexar arquivos manualmente.
 
-Depois abra o app uma vez para confirmar que ele funciona. Pode fechar em seguida.
+## Fluxo normal
 
-2. Altere a versão para 0.1.1
-No arquivo:
+1. Faça commits seguindo o padrão Conventional Commits:
 
-apps/desktop/package.json
+   - `fix: corrige falha ao conectar` gera uma versão patch, por exemplo `1.3.8` → `1.3.9`.
+   - `feat: adiciona pastas nas conexões` gera uma versão minor, por exemplo `1.3.8` → `1.4.0`.
+   - Um commit com `!` ou `BREAKING CHANGE` gera uma versão major, por exemplo `1.3.8` → `2.0.0`.
 
-troque:
+2. Envie os commits para a branch `main`.
 
-"version": "0.1.0"
+3. O workflow `Release` criará ou atualizará uma pull request com título semelhante a
+   `chore: release 1.4.0`. Essa PR contém:
 
-para:
+   - a nova versão em `apps/desktop/package.json`;
+   - a nova versão em `.release-please-manifest.json`;
+   - o `CHANGELOG.md` atualizado.
 
-"version": "0.1.1"
+4. Revise e faça merge da PR de release.
 
-Não precisa mudar a versão do root package.json.
+5. Após o merge, o mesmo workflow executará automaticamente:
 
-3. Gere os arquivos da 0.1.1
-No terminal, na raiz do projeto:
+   - criação da tag `v<versão>`;
+   - criação da GitHub Release;
+   - compilação no runner `windows-latest`;
+   - geração do instalador NSIS;
+   - validação de `latest.yml`;
+   - envio do `.exe`, `.exe.blockmap` e `latest.yml` para a Release.
 
-pnpm --filter @gavadb/renderer run build
-pnpm --filter @gavadb/desktop run package:installer
+## Arquivos publicados
 
-Isso vai gerar os arquivos em:
+Para uma versão `1.4.0`, a Release deve conter:
 
-apps/desktop/release/
+- `MoonForOracle-1.4.0-win-x64.exe`
+- `MoonForOracle-1.4.0-win-x64.exe.blockmap`
+- `latest.yml`
 
-Você precisa pegar estes 3 arquivos novos:
+Esses três arquivos são necessários para o instalador e para o auto-updater do aplicativo.
 
-MoonForOracle-0.1.1-win-x64.exe
-MoonForOracle-0.1.1-win-x64.exe.blockmap
-latest.yml
+## Execução manual do workflow
 
-Atenção: o latest.yml deve ser o novo, gerado agora para 0.1.1. Abra ele e confirme que aparece:
+Em caso de necessidade, abra `GitHub → Actions → Release → Run workflow`.
+A execução manual não força uma nova versão: ela apenas processa commits convencionais que ainda
+não estejam em uma Release.
 
-version: 0.1.1
-path: MoonForOracle-0.1.1-win-x64.exe
+## Permissões necessárias no repositório
 
-4. Commit e tag
-Agora faça commit da mudança de versão e crie a tag:
+Em `Settings → Actions → General`:
 
-git add apps/desktop/package.json pnpm-lock.yaml
-git commit -m "Release v0.1.1"
-git tag v0.1.1
-git push origin main
-git push origin v0.1.1
+- habilite `Read and write permissions` em `Workflow permissions`;
+- habilite `Allow GitHub Actions to create and approve pull requests`;
+- permita `actions/*`, `pnpm/action-setup` e `googleapis/release-please-action`, ou permita todas as actions.
 
-Mesmo com GitHub Actions bloqueado, isso é útil porque a release manual usa a tag v0.1.1.
-
-5. Crie a release manual no GitHub
-Vá em:
-
-GitHub -> MoonForOracle -> Releases -> Draft a new release
-
-Preencha:
-
-Tag: v0.1.1
-Release title: v0.1.1
-
-Anexe exatamente estes 3 arquivos da pasta apps/desktop/release/:
-
-MoonForOracle-0.1.1-win-x64.exe
-MoonForOracle-0.1.1-win-x64.exe.blockmap
-Publish release
+Não é necessário manter um token pessoal: o workflow utiliza `GITHUB_TOKEN`.
