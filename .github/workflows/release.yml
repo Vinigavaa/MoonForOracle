@@ -73,7 +73,11 @@ jobs:
         run: pnpm run build
 
       - name: Build desktop installer
-        run: pnpm --filter @gavadb/desktop run package:installer -- --publish never
+        working-directory: apps/desktop
+        run: |
+          pnpm run build
+          pnpm run build:renderer
+          pnpm exec electron-builder --win --publish never
 
       - name: Validate release files
         shell: pwsh
