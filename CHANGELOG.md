@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.2](https://github.com/Vinigavaa/MoonForOracle/compare/v1.4.1...v1.4.2) (2026-08-20)
+
+
+### Bug Fixes
+
+* run installer build without argument forwarding ([7e70588](https://github.com/Vinigavaa/MoonForOracle/commit/7e7058815267de60d7655d49b516939d3d6dcc5d))
+* run installer build without argument forwarding ([8c0d3cb](https://github.com/Vinigavaa/MoonForOracle/commit/8c0d3cb2d9fe5e61a180582d0077a56e2f45200d))
+
 ## [1.4.1](https://github.com/Vinigavaa/MoonForOracle/compare/v1.4.0...v1.4.1) (2026-08-20)
 
 
