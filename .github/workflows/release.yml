@@ -73,7 +73,7 @@ jobs:
         run: pnpm run build
 
       - name: Build desktop installer
-        run: pnpm --filter @gavadb/desktop run package:installer
+        run: pnpm --filter @gavadb/desktop run package:installer -- --publish never
 
       - name: Validate release files
         shell: pwsh
