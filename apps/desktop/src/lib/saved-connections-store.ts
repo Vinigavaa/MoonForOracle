@@ -1,7 +1,15 @@
 import { app, safeStorage } from "electron";
 import fs from "node:fs";
 import path from "node:path";
-import type { SavedConnection, SaveConnectionRequest, SavedConnectionWithPassword } from "@gavadb/types";
+import { randomUUID } from "node:crypto";
+import type {
+  ConnectionFolder,
+  MoveConnectionRequest,
+  RenameConnectionFolderRequest,
+  SavedConnection,
+  SaveConnectionRequest,
+  SavedConnectionWithPassword,
+} from "@gavadb/types";
 
 /**
  * Persistent store for saved Oracle connections.
@@ -19,8 +27,9 @@ interface StoredConnection extends SavedConnection {
 }
 
 interface StoreData {
-  version: 1;
+  version: 2;
   connections: StoredConnection[];
+  folders: ConnectionFolder[];
 }
 
 export class SavedConnectionsStore {
@@ -36,15 +45,28 @@ export class SavedConnectionsStore {
     try {
       if (fs.existsSync(this.filePath)) {
         const raw = fs.readFileSync(this.filePath, "utf-8");
-        const parsed = JSON.parse(raw) as StoreData;
-        if (parsed.version === 1 && Array.isArray(parsed.connections)) {
-          return parsed;
+        const parsed = JSON.parse(raw) as {
+          version?: number;
+          connections?: StoredConnection[];
+          folders?: ConnectionFolder[];
+        };
+        if ((parsed.version === 1 || parsed.version === 2) && Array.isArray(parsed.connections)) {
+          const folders = Array.isArray(parsed.folders) ? parsed.folders : [];
+          const folderIds = new Set(folders.map((folder) => folder.id));
+          return {
+            version: 2,
+            folders,
+            connections: parsed.connections.map((connection) => ({
+              ...connection,
+              folderId: connection.folderId && folderIds.has(connection.folderId) ? connection.folderId : null,
+            })),
+          };
         }
       }
     } catch (err) {
       console.error("[SavedConnectionsStore] Failed to load:", err);
     }
-    return { version: 1, connections: [] };
+    return { version: 2, connections: [], folders: [] };
   }
 
   private persist(): void {
@@ -100,6 +122,62 @@ export class SavedConnectionsStore {
       });
   }
 
+  listFolders(): ConnectionFolder[] {
+    return [...this.data.folders].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  }
+
+  createFolder(name: string): ConnectionFolder {
+    const normalizedName = this.validateFolderName(name);
+    const now = new Date().toISOString();
+    const folder: ConnectionFolder = {
+      id: randomUUID(),
+      name: normalizedName,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.data.folders.push(folder);
+    this.persist();
+    return folder;
+  }
+
+  renameFolder(request: RenameConnectionFolderRequest): ConnectionFolder {
+    const folder = this.data.folders.find((item) => item.id === request.id);
+    if (!folder) {
+      throw { code: "OBJECT_NOT_FOUND", message: `Connection folder "${request.id}" not found.` };
+    }
+    folder.name = this.validateFolderName(request.name, request.id);
+    folder.updatedAt = new Date().toISOString();
+    this.persist();
+    return { ...folder };
+  }
+
+  deleteFolder(id: string): void {
+    const index = this.data.folders.findIndex((folder) => folder.id === id);
+    if (index < 0) {
+      throw { code: "OBJECT_NOT_FOUND", message: `Connection folder "${id}" not found.` };
+    }
+    this.data.folders.splice(index, 1);
+    for (const connection of this.data.connections) {
+      if (connection.folderId === id) connection.folderId = null;
+    }
+    this.persist();
+  }
+
+  moveConnection(request: MoveConnectionRequest): SavedConnection {
+    const connection = this.data.connections.find((item) => item.id === request.connectionId);
+    if (!connection) {
+      throw { code: "OBJECT_NOT_FOUND", message: `Saved connection "${request.connectionId}" not found.` };
+    }
+    if (request.folderId !== null && !this.data.folders.some((folder) => folder.id === request.folderId)) {
+      throw { code: "OBJECT_NOT_FOUND", message: `Connection folder "${request.folderId}" not found.` };
+    }
+    connection.folderId = request.folderId;
+    connection.updatedAt = new Date().toISOString();
+    this.persist();
+    const { encryptedPassword: _, ...result } = connection;
+    return result;
+  }
+
   getWithPassword(id: string): SavedConnectionWithPassword {
     const stored = this.data.connections.find((c) => c.id === id);
     if (!stored) {
@@ -115,6 +193,9 @@ export class SavedConnectionsStore {
 
     const stored: StoredConnection = {
       ...connection,
+      folderId: connection.folderId && this.data.folders.some((folder) => folder.id === connection.folderId)
+        ? connection.folderId
+        : null,
       updatedAt: new Date().toISOString(),
     };
 
@@ -163,5 +244,22 @@ export class SavedConnectionsStore {
     if (!stored) return;
     stored.lastUsedAt = new Date().toISOString();
     this.persist();
+  }
+
+  private validateFolderName(name: string, currentId?: string): string {
+    const normalizedName = name.trim();
+    if (!normalizedName) {
+      throw { code: "INVALID_NAME", message: "Folder name cannot be empty." };
+    }
+    if (normalizedName.length > 80) {
+      throw { code: "INVALID_NAME", message: "Folder name cannot exceed 80 characters." };
+    }
+    const duplicate = this.data.folders.some(
+      (folder) => folder.id !== currentId && folder.name.localeCompare(normalizedName, undefined, { sensitivity: "base" }) === 0,
+    );
+    if (duplicate) {
+      throw { code: "INVALID_NAME", message: `A folder named "${normalizedName}" already exists.` };
+    }
+    return normalizedName;
   }
 }

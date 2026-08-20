@@ -27,6 +27,9 @@ import type {
   ThemeDuplicateRequest,
   ThemeSetDefaultRequest,
   ThemeExportRequest,
+  CreateConnectionFolderRequest,
+  RenameConnectionFolderRequest,
+  MoveConnectionRequest,
 } from "@gavadb/types";
 
 contextBridge.exposeInMainWorld("gavadb", {
@@ -158,6 +161,21 @@ contextBridge.exposeInMainWorld("gavadb", {
 
   connUpdateLastUsed: (id: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.CONN_UPDATE_LAST_USED, id),
+
+  connListFolders: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.CONN_LIST_FOLDERS),
+
+  connCreateFolder: (request: CreateConnectionFolderRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.CONN_CREATE_FOLDER, request),
+
+  connRenameFolder: (request: RenameConnectionFolderRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.CONN_RENAME_FOLDER, request),
+
+  connDeleteFolder: (id: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.CONN_DELETE_FOLDER, id),
+
+  connMove: (request: MoveConnectionRequest) =>
+    ipcRenderer.invoke(IPC_CHANNELS.CONN_MOVE, request),
 
   windowMinimize: () =>
     ipcRenderer.invoke(IPC_CHANNELS.WINDOW_MINIMIZE),

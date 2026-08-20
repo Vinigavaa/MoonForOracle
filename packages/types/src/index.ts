@@ -1,4 +1,17 @@
-export type { ConnectionConfig, ConnectionStatus, TransactionState, TnsAliasEntry, TnsFileRequest, SavedConnection, SaveConnectionRequest, SavedConnectionWithPassword } from "./connection";
+export type {
+  ConnectionConfig,
+  ConnectionStatus,
+  TransactionState,
+  TnsAliasEntry,
+  TnsFileRequest,
+  SavedConnection,
+  SaveConnectionRequest,
+  SavedConnectionWithPassword,
+  ConnectionFolder,
+  CreateConnectionFolderRequest,
+  RenameConnectionFolderRequest,
+  MoveConnectionRequest,
+} from "./connection";
 export type {
   DatabaseObjectType,
   OracleObjectKind,
