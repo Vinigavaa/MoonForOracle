@@ -1,0 +1,19 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "simple",
+  "include-component-in-tag": false,
+  "pull-request-title-pattern": "chore: release ${version}",
+  "bootstrap-sha": "f89b8e2d9b7d1c7e67a8df3fe1fe3188f45582f7",
+  "packages": {
+    ".": {
+      "package-name": "MoonForOracle",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "apps/desktop/package.json",
+          "jsonpath": "$.version"
+        }
+      ]
+    }
+  }
+}
