@@ -426,7 +426,18 @@ export function registerIpcHandlers(win: BrowserWindow): void {
       return ok(result);
     } catch (err) {
       const appError = logIpcError(IPC_CHANNELS.DB_EXECUTE_QUERY, err);
+      // A cancelled execution may have rolled back the transaction.
+      emitTransactionState(win);
       return fail(appError);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.DB_CANCEL_EXECUTION, async () => {
+    try {
+      const result = await useCases.cancelExecution(repo);
+      return ok(result);
+    } catch (err) {
+      return fail(logIpcError(IPC_CHANNELS.DB_CANCEL_EXECUTION, err));
     }
   });
 

@@ -34,6 +34,8 @@ export interface QueryTabState {
   executedBinds: Record<string, BindParameterValue> | null;
   error: string | null;
   executing: boolean;
+  /** A cancel request was sent for the running execution */
+  cancelling: boolean;
   loadingMore: boolean;
   mutating: boolean;
   sorting: boolean;
@@ -118,6 +120,7 @@ export function createQueryTab(connectionId: string | null = null, partial?: Par
     executedBinds: partial?.executedBinds ?? null,
     error: partial?.error ?? null,
     executing: partial?.executing ?? false,
+    cancelling: partial?.cancelling ?? false,
     loadingMore: partial?.loadingMore ?? false,
     mutating: partial?.mutating ?? false,
     sorting: partial?.sorting ?? false,

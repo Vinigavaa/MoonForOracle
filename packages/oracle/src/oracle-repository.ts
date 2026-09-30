@@ -4,6 +4,7 @@ import oracledb from "oracledb";
 import type { Connection } from "oracledb";
 import type {
   AppError,
+  CancelExecutionResult,
   ConnectionConfig,
   CompileError,
   CompileObjectRequest,
@@ -72,6 +73,7 @@ export interface DatabaseRepository {
   disconnect(): Promise<void>;
   testConnection(): Promise<boolean>;
   executeQuery(request: SqlExecutionRequest): Promise<SqlExecutionResponse>;
+  cancelExecution(): Promise<CancelExecutionResult>;
   inferBinds(sql: string): Promise<BindMetadata[]>;
   getObjectSql(type: DatabaseObjectType, name: string): Promise<string>;
   compileObject(request: CompileObjectRequest): Promise<CompileResult>;
@@ -101,11 +103,18 @@ export interface OracleRepositoryOptions {
   thickModeLibDir?: string;
 }
 
+interface RunningExecution {
+  cancelRequested: boolean;
+  /** Non-SELECT statements roll back the whole transaction when cancelled */
+  rollbackOnCancel: boolean;
+}
+
 export class OracleRepository implements DatabaseRepository {
   private connection: Connection | null = null;
   private currentConfig: ConnectionConfig | null = null;
   private runtimeConfig: ConnectionConfig | null = null;
   private pendingTransaction = false;
+  private readonly runningExecutions = new Set<RunningExecution>();
 
   constructor(options?: OracleRepositoryOptions) {
     configureOracleFetchTypes();
@@ -222,43 +231,93 @@ export class OracleRepository implements DatabaseRepository {
     const isSelect = stmtType === "select";
     const start = performance.now();
     const binds = buildOracleBinds(request.binds);
+    const execution: RunningExecution = { cancelRequested: false, rollbackOnCancel: !isSelect };
 
-    await this.prepareDbmsOutput(conn);
+    this.runningExecutions.add(execution);
+    try {
+      await this.prepareDbmsOutput(conn);
+
+      try {
+        // A cancel can arrive while DBMS_OUTPUT is being prepared (whose errors are swallowed).
+        if (execution.cancelRequested) {
+          throw new Error("Execution cancelled before start");
+        }
+
+        if (isSelect) {
+          const result = await this.executeSelect(conn, sql, pageSize, offset, start, request.orderBy, binds);
+          const dbmsOutput = await this.consumeDbmsOutput(conn);
+          if (execution.cancelRequested) {
+            throw await this.finishCancelledExecution(conn, execution, dbmsOutput);
+          }
+          return { ...result, dbmsOutput };
+        }
+
+        const result = await conn.execute(
+          sql,
+          binds,
+          { outFormat: oracledb.OUT_FORMAT_OBJECT, autoCommit: false },
+        );
+
+        if (stmtType === "dml" && (result.rowsAffected ?? 0) > 0) {
+          this.pendingTransaction = true;
+        }
+
+        const dbmsOutput = await this.consumeDbmsOutput(conn);
+        if (execution.cancelRequested) {
+          // The break arrived after the statement finished: still honor the cancel + rollback.
+          throw await this.finishCancelledExecution(conn, execution, dbmsOutput);
+        }
+
+        return {
+          columns: [],
+          rows: [],
+          rowCount: 0,
+          executionTimeMs: Math.round(performance.now() - start),
+          hasMore: false,
+          offset: 0,
+          totalFetched: 0,
+          statementType: stmtType,
+          rowsAffected: result.rowsAffected ?? 0,
+          dbmsOutput,
+        };
+      } catch (err) {
+        if (isAppError(err) && err.code === "QUERY_CANCELLED") {
+          throw err;
+        }
+        const dbmsOutput = await this.consumeDbmsOutput(conn);
+        if (execution.cancelRequested) {
+          throw await this.finishCancelledExecution(conn, execution, dbmsOutput);
+        }
+        throw attachDbmsOutputToError(err, dbmsOutput);
+      }
+    } finally {
+      this.runningExecutions.delete(execution);
+    }
+  }
+
+  /**
+   * Interrupts the statement currently running on the session (ORA-01013).
+   * The interrupted executeQuery call performs the rollback and reports the cancellation.
+   */
+  async cancelExecution(): Promise<CancelExecutionResult> {
+    const conn = this.connection;
+    const pending = [...this.runningExecutions].filter((execution) => !execution.cancelRequested);
+    if (!conn || pending.length === 0) {
+      return { cancelled: false };
+    }
+
+    for (const execution of pending) {
+      execution.cancelRequested = true;
+    }
 
     try {
-      if (isSelect) {
-        const result = await this.executeSelect(conn, sql, pageSize, offset, start, request.orderBy, binds);
-        const dbmsOutput = await this.consumeDbmsOutput(conn);
-        return { ...result, dbmsOutput };
-      }
-
-      const result = await conn.execute(
-        sql,
-        binds,
-        { outFormat: oracledb.OUT_FORMAT_OBJECT, autoCommit: false },
-      );
-
-      if (stmtType === "dml" && (result.rowsAffected ?? 0) > 0) {
-        this.pendingTransaction = true;
-      }
-
-      const dbmsOutput = await this.consumeDbmsOutput(conn);
-      return {
-        columns: [],
-        rows: [],
-        rowCount: 0,
-        executionTimeMs: Math.round(performance.now() - start),
-        hasMore: false,
-        offset: 0,
-        totalFetched: 0,
-        statementType: stmtType,
-        rowsAffected: result.rowsAffected ?? 0,
-        dbmsOutput,
-      };
+      console.log("[Oracle] Sending break to cancel the running execution");
+      await conn.break();
     } catch (err) {
-      const dbmsOutput = await this.consumeDbmsOutput(conn);
-      throw attachDbmsOutputToError(err, dbmsOutput);
+      console.warn("[Oracle] Failed to send break:", (err as Error).message);
     }
+
+    return { cancelled: true };
   }
 
   async updateRows(request: UpdateRowRequest[]): Promise<MutationResult> {
@@ -667,6 +726,36 @@ export class OracleRepository implements DatabaseRepository {
   }
 
   // ─── Private helpers ──────────────────────────────────────────────
+
+  private async finishCancelledExecution(
+    conn: Connection,
+    execution: RunningExecution,
+    dbmsOutput: DbmsOutputLine[],
+  ): Promise<AppError> {
+    let rolledBack = false;
+
+    if (execution.rollbackOnCancel) {
+      // A late break may interrupt the first rollback attempt, so retry once.
+      for (let attempt = 0; attempt < 2 && !rolledBack; attempt++) {
+        try {
+          await conn.rollback();
+          this.pendingTransaction = false;
+          rolledBack = true;
+        } catch (err) {
+          console.warn("[Oracle] Rollback after cancel failed:", (err as Error).message);
+        }
+      }
+    }
+
+    const message = !execution.rollbackOnCancel
+      ? "Execution cancelled by user."
+      : rolledBack
+        ? "Execution cancelled by user. Transaction rolled back."
+        : "Execution cancelled by user, but the rollback failed. Use Rollback to discard pending changes.";
+
+    const error: AppError = { code: "QUERY_CANCELLED", message };
+    return dbmsOutput.length > 0 ? { ...error, dbmsOutput } : error;
+  }
 
   private requireConnection(): Connection {
     if (!this.connection) {

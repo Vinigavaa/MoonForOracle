@@ -124,6 +124,12 @@ export interface SqlExecutionRequest {
 /** Detected SQL statement kind */
 export type SqlStatementType = "select" | "dml" | "ddl" | "plsql" | "unknown";
 
+/** Result of a cancel request for the running SQL execution */
+export interface CancelExecutionResult {
+  /** True when an execution was running and a cancel was sent to Oracle */
+  cancelled: boolean;
+}
+
 /** Standard SQL execution response */
 export interface SqlExecutionResponse {
   columns: QueryResultColumn[];

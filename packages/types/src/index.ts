@@ -43,6 +43,7 @@ export type {
   SqlExecutionRequest,
   SqlStatementType,
   SqlExecutionResponse,
+  CancelExecutionResult,
   CountRowsRequest,
   CountRowsResponse,
   BindDataType,
