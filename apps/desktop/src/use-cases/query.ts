@@ -1,5 +1,6 @@
 import type { DatabaseRepository } from "@gavadb/oracle";
 import type {
+  CancelExecutionResult,
   CountRowsRequest,
   CountRowsResponse,
   MutationResult,
@@ -14,6 +15,10 @@ export async function executeQuery(
   request: SqlExecutionRequest,
 ): Promise<SqlExecutionResponse> {
   return repo.executeQuery(request);
+}
+
+export async function cancelExecution(repo: DatabaseRepository): Promise<CancelExecutionResult> {
+  return repo.cancelExecution();
 }
 
 export async function updateRows(

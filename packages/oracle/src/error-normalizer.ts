@@ -46,6 +46,10 @@ function mapOraErrorCode(errorNum: number): AppErrorCode {
   if ([12170, 12608].includes(errorNum)) {
     return "QUERY_TIMEOUT";
   }
+  // Cancelamento solicitado pelo usuário (connection.break)
+  if (errorNum === 1013) {
+    return "QUERY_CANCELLED";
+  }
   // Permissão
   if ([1031, 942, 1].includes(errorNum)) {
     return errorNum === 942 ? "OBJECT_NOT_FOUND" : "PERMISSION_DENIED";
@@ -74,6 +78,7 @@ function friendlyMessage(code: AppErrorCode, oraNum?: number): string {
     CONNECTION_LOST: `${prefix}Connection to the database was lost`,
     QUERY_FAILED: `${prefix}Query execution failed`,
     QUERY_TIMEOUT: `${prefix}Query timed out`,
+    QUERY_CANCELLED: `${prefix}Execution cancelled by user`,
     OBJECT_NOT_FOUND: `${prefix}Database object not found or not accessible`,
     PERMISSION_DENIED: `${prefix}Insufficient privileges`,
     INVALID_NAME: `${prefix}Invalid name`,

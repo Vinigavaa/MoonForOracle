@@ -55,10 +55,12 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
   ref,
 ) {
   const toast = useToastContext();
-  const { execute, updateRows, countRows, inferBinds } = useSqlExecution();
+  const { execute, cancel, rollback, updateRows, countRows, inferBinds } = useSqlExecution();
   const { resolveObject } = useObjectResolver(isConnected);
   const editorRef = useRef<SqlCodeEditorHandle | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  /** Tabs whose running execution the user asked to cancel */
+  const cancelRequestedTabsRef = useRef(new Set<string>());
 
   const exportColumns = useMemo<QueryExportColumn[]>(
     () => (activeTab.result?.columns ?? []).map((column) => ({
@@ -107,6 +109,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
   const recoverUiState = useCallback((restoreFocus = false) => {
     applyPatch({
       executing: false,
+      cancelling: false,
       loadingMore: false,
       mutating: false,
       sorting: false,
@@ -133,6 +136,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
       sorting: false,
     });
 
+    cancelRequestedTabsRef.current.delete(activeTab.id);
     let shouldRestoreFocus = false;
     try {
       const result = await execute(sql, { binds });
@@ -149,6 +153,9 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
       }
 
       shouldRestoreFocus = true;
+      if (result.cancelled) {
+        toast.info(result.error ?? "Execution cancelled");
+      }
       applyPatch({
         error: result.error ?? "Unknown error",
         result: null,
@@ -166,7 +173,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
     } finally {
       recoverUiState(shouldRestoreFocus);
     }
-  }, [activeTab.hasPendingTransaction, applyPatch, execute, recoverUiState, showResults]);
+  }, [activeTab.hasPendingTransaction, activeTab.id, applyPatch, execute, recoverUiState, showResults, toast]);
 
   const executeActive = useCallback(async () => {
     if (!isConnected) {
@@ -217,6 +224,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
       sorting: false,
     });
 
+    cancelRequestedTabsRef.current.delete(activeTab.id);
     let shouldRestoreFocus = false;
     try {
       const result = await execute(target.sql);
@@ -233,6 +241,9 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
       }
 
       shouldRestoreFocus = true;
+      if (result.cancelled) {
+        toast.info(result.error ?? "Execution cancelled");
+      }
       applyPatch({
         error: result.error ?? "Unknown error",
         result: null,
@@ -250,7 +261,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
     } finally {
       recoverUiState(shouldRestoreFocus);
     }
-  }, [activeTab.hasPendingTransaction, applyPatch, execute, inferBinds, isConnected, recoverUiState, showResults, toast]);
+  }, [activeTab.hasPendingTransaction, activeTab.id, applyPatch, execute, inferBinds, isConnected, recoverUiState, showResults, toast]);
 
   const executeAll = useCallback(async () => {
     if (!isConnected) {
@@ -288,13 +299,22 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
     const batchResults: BatchStatementExecution[] = [];
     let hasPendingTransaction = activeTab.hasPendingTransaction;
     let shouldRestoreFocus = false;
+    let cancelled = false;
+    cancelRequestedTabsRef.current.delete(activeTab.id);
 
     try {
       for (const target of targets) {
+        if (cancelRequestedTabsRef.current.has(activeTab.id)) {
+          cancelled = true;
+          break;
+        }
         try {
           const result = await execute(target.sql);
           if (result.error) {
             shouldRestoreFocus = true;
+          }
+          if (result.cancelled) {
+            cancelled = true;
           }
           if (result.data?.statementType === "dml") {
             hasPendingTransaction = true;
@@ -307,6 +327,7 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
             dbmsOutput: result.data?.dbmsOutput ?? result.dbmsOutput ?? [],
           });
           applyPatch({ batchResults: [...batchResults], hasPendingTransaction });
+          if (cancelled) break;
         } catch (error) {
           shouldRestoreFocus = true;
           batchResults.push({
@@ -319,11 +340,40 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
           applyPatch({ batchResults: [...batchResults], hasPendingTransaction });
         }
       }
+      if (cancelled) {
+        // Cancelling a script discards everything it changed, even when the cancel
+        // landed between two statements (nothing was running to interrupt).
+        shouldRestoreFocus = true;
+        const rollbackResult = await rollback();
+        const skipped = targets.length - batchResults.length;
+        if (rollbackResult.error) {
+          toast.error(`Execution cancelled, but the rollback failed: ${rollbackResult.error}`);
+        } else {
+          hasPendingTransaction = false;
+          toast.info(`Execution cancelled - transaction rolled back${skipped > 0 ? `, ${skipped} statement(s) skipped` : ""}`);
+        }
+      }
     } finally {
+      cancelRequestedTabsRef.current.delete(activeTab.id);
       applyPatch({ batchResults: [...batchResults], hasPendingTransaction });
       recoverUiState(shouldRestoreFocus);
     }
-  }, [activeTab.hasPendingTransaction, applyPatch, execute, isConnected, recoverUiState, showResults, toast]);
+  }, [activeTab.hasPendingTransaction, activeTab.id, applyPatch, execute, isConnected, recoverUiState, rollback, showResults, toast]);
+
+  const cancelExecution = useCallback(async () => {
+    if (!activeTab.executing || activeTab.cancelling) return;
+
+    const tabId = activeTab.id;
+    cancelRequestedTabsRef.current.add(tabId);
+    applyPatch({ cancelling: true });
+
+    const outcome = await cancel();
+    if (outcome.error) {
+      cancelRequestedTabsRef.current.delete(tabId);
+      applyPatch({ cancelling: false });
+      toast.error(`Failed to cancel execution: ${outcome.error}`);
+    }
+  }, [activeTab.cancelling, activeTab.executing, activeTab.id, applyPatch, cancel, toast]);
 
   const refreshActive = useCallback(async () => {
     const sql = activeTab.executedSql?.trim();
@@ -648,6 +698,8 @@ export const QueryEditorPane = forwardRef<QueryEditorPaneHandle, QueryEditorPane
             dbmsOutput={activeTab.dbmsOutput}
             error={activeTab.error}
             executing={activeTab.executing}
+            cancelling={activeTab.cancelling}
+            onCancel={() => void cancelExecution()}
             isConnected={isConnected}
             mutating={activeTab.mutating}
             loadingMore={activeTab.loadingMore}

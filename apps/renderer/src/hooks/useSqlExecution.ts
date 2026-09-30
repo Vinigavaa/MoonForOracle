@@ -19,6 +19,13 @@ interface ExecutionResult {
   data?: SqlExecutionResponse;
   error?: string;
   dbmsOutput?: DbmsOutputLine[];
+  /** True when the execution was interrupted by a user cancel request */
+  cancelled?: boolean;
+}
+
+interface CancelExecutionOutcome {
+  cancelled: boolean;
+  error?: string;
 }
 
 interface MutationExecutionResult {
@@ -52,9 +59,35 @@ export function useSqlExecution() {
       if (res.success) {
         return { data: res.data, dbmsOutput: res.data.dbmsOutput };
       }
-      return { error: formatError(res.error), dbmsOutput: res.error.dbmsOutput };
+      return {
+        error: formatError(res.error),
+        dbmsOutput: res.error.dbmsOutput,
+        cancelled: res.error.code === "QUERY_CANCELLED",
+      };
     } catch (err) {
       console.error("[SQL Execution] execute failed", err);
+      return { error: formatUnknownError(err) };
+    }
+  }, []);
+
+  const cancel = useCallback(async (): Promise<CancelExecutionOutcome> => {
+    try {
+      const res = await window.gavadb.dbCancelExecution();
+      if (res.success) return { cancelled: res.data.cancelled };
+      return { cancelled: false, error: formatError(res.error) };
+    } catch (err) {
+      console.error("[SQL Execution] cancel failed", err);
+      return { cancelled: false, error: formatUnknownError(err) };
+    }
+  }, []);
+
+  const rollback = useCallback(async (): Promise<{ error?: string }> => {
+    try {
+      const res = await window.gavadb.dbRollback();
+      if (res.success) return {};
+      return { error: formatError(res.error) };
+    } catch (err) {
+      console.error("[SQL Execution] rollback failed", err);
       return { error: formatUnknownError(err) };
     }
   }, []);
@@ -99,7 +132,7 @@ export function useSqlExecution() {
     }
   }, []);
 
-  return { execute, updateRows, countRows, inferBinds };
+  return { execute, cancel, rollback, updateRows, countRows, inferBinds };
 }
 
 function formatError(err: AppError): string {

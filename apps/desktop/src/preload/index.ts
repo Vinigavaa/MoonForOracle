@@ -96,6 +96,9 @@ contextBridge.exposeInMainWorld("gavadb", {
   dbExecuteQuery: (request: SqlExecutionRequest) =>
     ipcRenderer.invoke(IPC_CHANNELS.DB_EXECUTE_QUERY, request),
 
+  dbCancelExecution: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.DB_CANCEL_EXECUTION),
+
   dbInferBinds: (request: InferBindsRequest) =>
     ipcRenderer.invoke(IPC_CHANNELS.DB_INFER_BINDS, request),
 

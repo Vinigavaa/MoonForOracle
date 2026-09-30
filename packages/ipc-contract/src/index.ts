@@ -13,6 +13,7 @@ import type {
   MutationResult,
   SqlExecutionRequest,
   SqlExecutionResponse,
+  CancelExecutionResult,
   CountRowsRequest,
   CountRowsResponse,
   BindMetadata,
@@ -75,6 +76,7 @@ export interface IpcMainHandlers {
   "db:connect": (config: ConnectionConfig) => Promise<IpcResult<void>>;
   "db:disconnect": () => Promise<IpcResult<void>>;
   "db:execute-query": (request: SqlExecutionRequest) => Promise<IpcResult<SqlExecutionResponse>>;
+  "db:cancel-execution": () => Promise<IpcResult<CancelExecutionResult>>;
   "db:infer-binds": (request: InferBindsRequest) => Promise<IpcResult<BindMetadata[]>>;
   "db:count-rows": (request: CountRowsRequest) => Promise<IpcResult<CountRowsResponse>>;
   "db:update-rows": (request: UpdateRowRequest[]) => Promise<IpcResult<MutationResult>>;
@@ -164,6 +166,7 @@ export const IPC_CHANNELS = {
   DB_CONNECT: "db:connect",
   DB_DISCONNECT: "db:disconnect",
   DB_EXECUTE_QUERY: "db:execute-query",
+  DB_CANCEL_EXECUTION: "db:cancel-execution",
   DB_INFER_BINDS: "db:infer-binds",
   DB_COUNT_ROWS: "db:count-rows",
   DB_UPDATE_ROWS: "db:update-rows",
@@ -230,6 +233,7 @@ export interface GavaDbApi {
   dbConnect: (config: ConnectionConfig) => Promise<IpcResult<void>>;
   dbDisconnect: () => Promise<IpcResult<void>>;
   dbExecuteQuery: (request: SqlExecutionRequest) => Promise<IpcResult<SqlExecutionResponse>>;
+  dbCancelExecution: () => Promise<IpcResult<CancelExecutionResult>>;
   dbInferBinds: (request: InferBindsRequest) => Promise<IpcResult<BindMetadata[]>>;
   dbCountRows: (request: CountRowsRequest) => Promise<IpcResult<CountRowsResponse>>;
   dbUpdateRows: (request: UpdateRowRequest[]) => Promise<IpcResult<MutationResult>>;
