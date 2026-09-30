@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.0](https://github.com/Vinigavaa/MoonForOracle/compare/v1.4.2...v1.5.0) (2026-09-30)
+
+
+### Features
+
+* cancel running SQL execution with rollback ([88361cd](https://github.com/Vinigavaa/MoonForOracle/commit/88361cdd0bf4d554843428e7df0201332f99f3de))
+* cancel running SQL execution with rollback ([a1bf655](https://github.com/Vinigavaa/MoonForOracle/commit/a1bf655c6bc20769dbd7705672a95f0c6a2435b1))
+
 ## [1.4.2](https://github.com/Vinigavaa/MoonForOracle/compare/v1.4.1...v1.4.2) (2026-08-20)
 
 
